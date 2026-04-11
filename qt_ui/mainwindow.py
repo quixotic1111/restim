@@ -34,6 +34,7 @@ from device.focstim.proto_device import FOCStimProtoDevice, LSM6DSOX_SAMPLERATE_
 from device.neostim.neostim_device import NeoStim
 from qt_ui.widgets.battery_progress_bar import BatteryProgressBar
 from qt_ui.widgets.icon_with_connection_status import IconWithConnectionStatus
+from qt_ui.widgets.signal_lab_widget import SignalLabWidget
 from stim_math.axis import create_temporal_axis
 
 
@@ -57,6 +58,12 @@ class Window(QMainWindow, Ui_MainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setupUi(self)
+
+        # Signal Lab: standalone audio-experimentation tab. Added programmatically
+        # (not via the generated UI) so it does not get clobbered by pyside6-uic
+        # regeneration from designer/mainwindow.ui.
+        self.tab_signal_lab = SignalLabWidget()
+        self.tabWidget.addTab(self.tab_signal_lab, "Signal Lab")
 
         self.playstate = PlayState.STOPPED
         self.tab_volume.set_play_state(self.playstate)
@@ -398,9 +405,13 @@ class Window(QMainWindow, Ui_MainWindow):
                     self.tab_vibrate,
                     self.tab_details,
                     self.tab_a_b_testing,
-                    self.tab_neostim}
+                    self.tab_neostim,
+                    self.tab_signal_lab}
 
-        visible = {self.tab_threephase, self.tab_volume, self.tab_vibrate, self.tab_details}
+        # tab_signal_lab is always visible: it owns its own audio output and is
+        # independent of the selected stim device.
+        visible = {self.tab_threephase, self.tab_volume, self.tab_vibrate,
+                   self.tab_details, self.tab_signal_lab}
 
         all_widgets = {self.device_volume_display, self.battery_bar, self.foc_device_stats}
         visible_widgets = set()
