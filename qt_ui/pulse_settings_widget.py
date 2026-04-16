@@ -87,6 +87,7 @@ class PulseSettingsWidget(QtWidgets.QWidget):
         self.axis_pulse_width = create_constant_axis(settings.pulse_width.get())
         self.axis_pulse_interval_random = create_constant_axis(settings.pulse_interval_random.get() / 100)
         self.axis_pulse_rise_time = create_constant_axis(settings.pulse_rise_time.get())
+        self.axis_tau = create_constant_axis(settings.tau_us.get())
 
         l = QtWidgets.QFormLayout(self)
         l.setObjectName("FormLayout")
@@ -149,12 +150,82 @@ class PulseSettingsWidget(QtWidgets.QWidget):
         gb.setLayout(gb_l)
         l.addWidget(gb)
 
+        # Tau (nerve time constant). FOC-Stim only. Drives the carrier-frequency
+        # derating: derating = (f·τ + 0.5) / (f_max·τ + 0.5). Lives here rather
+        # than on the Volume tab because it changes how every pulse param above
+        # translates to delivered charge.
+        gb_tau = QtWidgets.QGroupBox("Charge response (FOC-Stim)", self)
+        gb_tau_l = QtWidgets.QFormLayout(gb_tau)
+        tau_tooltip = (
+            "<b>Tau (τ) — nerve time constant, in microseconds.</b><br><br>"
+            "Models how the body integrates pulse charge. Drives the carrier-frequency "
+            "derating shown below:<br>"
+            "<tt>derating = (f·τ + 0.5) / (f<sub>max</sub>·τ + 0.5)</tt><br><br>"
+            "<b>Lower τ (≈100 µs):</b> minimal derating — low-carrier pulses keep their punch. "
+            "Biases toward fast/touch fibres.<br>"
+            "<b>355 µs (default):</b> sciatic chronaxie average. Start here.<br>"
+            "<b>Higher τ (≈600–900 µs):</b> stronger derating — low carriers held back so "
+            "perceived intensity stays uniform across a carrier sweep.<br><br>"
+            "<i>Tuning rule:</i> if low carriers feel <i>too strong</i>, raise τ. "
+            "If they feel <i>too weak</i>, lower τ. Adjust in 50–100 µs steps. "
+            "Or use the preset row below."
+        )
+        tau_slider = QtWidgets.QDoubleSpinBox(minimum=0, maximum=1000)
+        tau_slider.setDecimals(0)
+        tau_slider.setSingleStep(10)
+        tau_slider.setValue(settings.tau_us.get())
+        tau_slider.setKeyboardTracking(False)
+        tau_slider.setToolTip(tau_tooltip)
+        tau_label = QtWidgets.QLabel("tau [µs] (?)")
+        tau_label.setToolTip(tau_tooltip)
+        gb_tau_l.addRow(tau_label, tau_slider)
+
+        # Fibre-target presets. Snap tau to sensible values for common
+        # tuning intents. Acts on the spinbox; the controller picks up the
+        # change and propagates it to the axis like any user edit.
+        preset_row = QtWidgets.QHBoxLayout()
+        for label, value in [
+            ("Touch", 150),
+            ("Default", 355),
+            ("Deep", 600),
+            ("Flat", 900),
+        ]:
+            btn = QtWidgets.QPushButton(f"{label}\n({value} µs)")
+            btn.setToolTip(
+                f"Set tau to {value} µs — "
+                + {
+                    "Touch": "minimal derating; low-carrier pulses stay punchy. "
+                             "Use if low carriers feel weak.",
+                    "Default": "sciatic chronaxie average. Start here.",
+                    "Deep": "stronger derating at low carrier; slower/deeper fibre bias. "
+                            "Use if low carriers feel a bit too sharp.",
+                    "Flat": "strongest derating; most uniform perceived intensity across "
+                            "the carrier range. Use if low carriers feel painful.",
+                }[label]
+            )
+            btn.clicked.connect(lambda _, v=value: tau_slider.setValue(float(v)))
+            preset_row.addWidget(btn)
+        gb_tau_l.addRow(QtWidgets.QLabel("presets"), preset_row)
+
+        derating_label = QtWidgets.QLabel("derating @ carrier (?)")
+        derating_label.setToolTip(
+            "How much the output is scaled at the current carrier vs. the device's\n"
+            "maximum carrier. 100% = no derating (carrier at max). Lower carriers\n"
+            "are derated to keep delivered charge per pulse constant."
+        )
+        derating_info = QtWidgets.QLabel("placeholder")
+        gb_tau_l.addRow(derating_label, derating_info)
+        gb_tau.setLayout(gb_tau_l)
+        l.addWidget(gb_tau)
+
         self.carrier = carrier_slider
         self.pulse_freq_slider = pulse_freq_slider
         self.pulse_width_slider = pulse_width_slider
         self.details_info = details_info
         self.pulse_interval_random = pulse_interval_random_slider
         self.pulse_rise_time = pulse_rise_time_slider
+        self.tau_slider = tau_slider
+        self.derating_info = derating_info
 
 
         self.carrier_controller = AxisController(self.carrier)
@@ -172,16 +243,21 @@ class PulseSettingsWidget(QtWidgets.QWidget):
         self.pulse_rise_time_controller = AxisController(self.pulse_rise_time)
         self.pulse_rise_time_controller.link_axis(self.axis_pulse_rise_time)
 
+        self.tau_controller = AxisController(self.tau_slider)
+        self.tau_controller.link_axis(self.axis_tau)
+
         self.carrier_controller.modified_by_user.connect(self.settings_changed)
         self.pulse_width_controller.modified_by_user.connect(self.settings_changed)
         self.pulse_frequency_controller.modified_by_user.connect(self.settings_changed)
         self.pulse_interval_random_controller.modified_by_user.connect(self.settings_changed)
         self.pulse_rise_time_controller.modified_by_user.connect(self.settings_changed)
+        self.tau_controller.modified_by_user.connect(self.settings_changed)
 
         self.settings_changed()
 
     def set_safety_limits(self, min_carrier, max_carrier):
         self.carrier.setRange(min_carrier, max_carrier)
+        self.settings_changed()  # refresh derating readout against new max
 
     def settings_changed(self):
         # update text
@@ -197,6 +273,18 @@ class PulseSettingsWidget(QtWidgets.QWidget):
             self.details_info.setStyleSheet('color: red')
             self.details_info.setText(f'{1:.0%}')
 
+        # Carrier-frequency derating preview. Uses the same formula as
+        # device/focstim/{three,four}phase_algorithm.frequency_derating_factor:
+        # derating = (f·τ + 0.5) / (f_max·τ + 0.5). f_max comes from the
+        # spinbox's safety-limit-derived range.
+        tau_seconds = self.tau_slider.value() * 1e-6
+        max_carrier = self.carrier.maximum()
+        if max_carrier > 0 and (max_carrier * tau_seconds + 0.5) > 0:
+            derating = (carrier_freq * tau_seconds + 0.5) / (max_carrier * tau_seconds + 0.5)
+            self.derating_info.setText(f'{derating:.0%} (of {int(max_carrier)} Hz max)')
+        else:
+            self.derating_info.setText('—')
+
         self.mpl_canvas.updateParams(carrier_freq, pulse_freq, pulse_width, self.pulse_interval_random.value() / 100, rise_time)
 
     def save_settings(self):
@@ -205,3 +293,4 @@ class PulseSettingsWidget(QtWidgets.QWidget):
         settings.pulse_width.set(self.pulse_width_controller.last_user_entered_value)
         settings.pulse_interval_random.set(self.pulse_interval_random_controller.last_user_entered_value * 100)
         settings.pulse_rise_time.set(self.pulse_rise_time_controller.last_user_entered_value)
+        settings.tau_us.set(self.tau_controller.last_user_entered_value)

@@ -1,10 +1,13 @@
 import os
+import re
 import zipfile
 import pathlib
 import logging
 # from importlib.abc import Traversable # since python 3.11
 
 logger = logging.getLogger('restim.funscript')
+
+VARIANT_FOLDER_PATTERN = re.compile(r'^[A-Z]$')
 
 
 def case_insensitive_compare(a, b):
@@ -121,3 +124,30 @@ def collect_funscripts(
 
 
     return collected_files
+
+
+def detect_variant_folders(media_path: str) -> list[tuple[str, str]]:
+    """
+    Look for a sibling `<media_prefix>_variants/` folder next to the media file.
+    Returns an ordered list of (letter, absolute_path) for subfolders matching
+    a single uppercase letter (A-Z). Empty if no variants folder exists.
+    """
+    if not media_path:
+        return []
+    dirname = os.path.dirname(media_path)
+    basename = os.path.basename(media_path)
+    media_prefix, _, _ = split_funscript_path(basename)
+    if not media_prefix:
+        return []
+    variants_dir = os.path.join(dirname, f'{media_prefix}_variants')
+    if not os.path.isdir(variants_dir):
+        return []
+    results = []
+    try:
+        for entry in sorted(os.listdir(variants_dir)):
+            full = os.path.join(variants_dir, entry)
+            if os.path.isdir(full) and VARIANT_FOLDER_PATTERN.match(entry):
+                results.append((entry, full))
+    except OSError:
+        return []
+    return results

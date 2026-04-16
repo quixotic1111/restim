@@ -1,15 +1,19 @@
 """
-Signal Lab tab: standalone envelope-shaping experimentation tool.
+Signal Lab tab: envelope-shaping experimentation tool with two output modes.
 
-Plays a carrier sine wave multiplied by an amplitude-modulation envelope through
-the system's default audio output. Independent of the main stim audio pipeline
-and does not drive connected stim hardware (FOC-Stim, NeoStim, etc.) - it's a
-laptop-audio experimentation tool for understanding the vibrate envelope shape
-parameters in isolation.
+Audio mode (default): plays a carrier sine wave multiplied by an amplitude-
+modulation envelope through the system's default audio output. Independent of
+the main stim pipeline; safe for experimentation without hardware.
+
+FOC-Stim mode: drives a connected FOC-Stim 4-phase device with the same
+envelope math, via a SignalLabFOCAlgorithm injected into the device's normal
+transport. Refuses to start if the main pipeline is already running; requires
+the user to have FOC-Stim 4-phase selected as their device type. 1-second
+amplitude soft-start on Play. All four electrodes driven equally.
 
 Reuses stim_math.amplitude_modulation.SineModulation for the envelope math and
 stim_math.sine_generator.AngleGenerator for phase-continuous carrier/modulation
-generation across buffer boundaries.
+generation across audio buffer boundaries.
 """
 
 import logging
@@ -21,16 +25,20 @@ from PySide6 import QtCore
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtWidgets import (
     QApplication,
+    QButtonGroup,
     QDoubleSpinBox,
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
+    QRadioButton,
     QSlider,
     QVBoxLayout,
     QWidget,
 )
 
+from device.focstim.signal_lab_algorithm import SignalLabFOCAlgorithm
 from stim_math import limits
 from stim_math.amplitude_modulation import SineModulation
 from stim_math.sine_generator import AngleGenerator
@@ -116,27 +124,50 @@ class LabeledSlider(QWidget):
         return self._value
 
 
+MODE_AUDIO = 'audio'
+MODE_FOCSTIM = 'focstim'
+
+# Default amplitude limit for FOC-Stim mode - deliberately conservative.
+# The absolute safety ceiling is limits.WaveformAmpltiudeFOC.max (0.15 A).
+FOC_AMPLITUDE_DEFAULT = 0.05
+
+
 class SignalLabWidget(QWidget):
     """
-    Signal Lab tab widget.
+    Signal Lab tab widget with two output modes (audio / FOC-Stim).
 
-    Owns its own sounddevice OutputStream that plays a carrier sine wave shaped
-    by a SineModulation envelope. The audio callback reads plain-float parameter
-    snapshots from self (updated by slider signals on the main thread), so there
-    is no direct Qt widget access from the audio thread.
+    Audio mode owns a sounddevice OutputStream. FOC-Stim mode delegates to
+    main_window.signal_start_signallab() with a SignalLabFOCAlgorithm that
+    reads this widget's slider state. Only one mode can be playing at a time;
+    switching modes is blocked while playing.
+
+    The audio callback reads plain-float parameter snapshots from self (updated
+    by slider signals on the main thread) so there is no direct Qt widget access
+    from the audio thread. The FOC-Stim algorithm reads the same attributes.
     """
 
-    def __init__(self, parent=None):
+    def __init__(self, main_window=None, parent=None):
         super().__init__(parent)
 
-        # Parameter snapshot read by the audio callback. CPython single-attribute
-        # float assignments are atomic under the GIL, so no lock is needed.
+        # Reference to the containing MainWindow. Used in FOC-Stim mode to
+        # check main-pipeline playstate, look up pulse-settings axes, and
+        # drive the device lifecycle. May be None in offscreen smoke tests
+        # that instantiate the widget directly.
+        self._main_window = main_window
+
+        # Parameter snapshot read by the audio callback and the FOC-Stim
+        # algorithm. CPython single-attribute float assignments are atomic
+        # under the GIL, so no lock is needed.
         self._carrier_freq = CARRIER_DEFAULT
         self._mod_freq = MOD_DEFAULT
         self._strength = 0.5
         self._rise_fall = 0.0
         self._dwell = 0.0
         self._volume = 0.2
+        self._foc_amplitude_limit = FOC_AMPLITUDE_DEFAULT
+
+        self._mode = MODE_AUDIO
+        self._active_mode = None  # which mode is currently playing (None if stopped)
 
         self._stream = None
         self._samplerate = FALLBACK_SAMPLERATE
@@ -144,6 +175,7 @@ class SignalLabWidget(QWidget):
         self._mod_gen = AngleGenerator()
 
         self._build_ui()
+        self._update_notice()
         self._update_plots()
 
         app = QApplication.instance()
@@ -155,14 +187,37 @@ class SignalLabWidget(QWidget):
     def _build_ui(self):
         root = QVBoxLayout(self)
 
-        notice = QLabel(
-            "This tab plays through your computer's default audio output. "
-            "It does not drive connected stim hardware - it is a standalone "
-            "experimentation tool for the vibrate envelope math."
+        self._notice = QLabel()
+        self._notice.setWordWrap(True)
+        self._notice.setStyleSheet("QLabel { color: gray; font-style: italic; }")
+        root.addWidget(self._notice)
+
+        # Output mode selector. Radio buttons so only one is active; grouped
+        # so mutual exclusion is automatic. Disabled while Play is active.
+        mode_group = QGroupBox("Output mode")
+        mode_layout = QHBoxLayout(mode_group)
+        self._mode_audio_radio = QRadioButton("Audio (computer speakers)")
+        self._mode_audio_radio.setChecked(True)
+        self._mode_audio_radio.setToolTip(
+            "Play the signal through your computer's default audio output.\n"
+            "Safe for experimentation without hardware. Does NOT drive any stim device."
         )
-        notice.setWordWrap(True)
-        notice.setStyleSheet("QLabel { color: gray; font-style: italic; }")
-        root.addWidget(notice)
+        self._mode_focstim_radio = QRadioButton("FOC-Stim (hardware)")
+        self._mode_focstim_radio.setToolTip(
+            "Drive a connected FOC-Stim 4-phase device.\n"
+            "Requires: main playback stopped, FOC-Stim 4-phase device selected.\n"
+            "Starts at amplitude 0 and ramps up over 1 second on Play.\n"
+            "All four electrodes are driven equally at full per-channel power.\n"
+            "Pulse parameters are read live from the Pulse Settings tab."
+        )
+        self._mode_button_group = QButtonGroup(self)
+        self._mode_button_group.addButton(self._mode_audio_radio)
+        self._mode_button_group.addButton(self._mode_focstim_radio)
+        self._mode_audio_radio.toggled.connect(self._on_mode_changed)
+        mode_layout.addWidget(self._mode_audio_radio)
+        mode_layout.addWidget(self._mode_focstim_radio)
+        mode_layout.addStretch(1)
+        root.addWidget(mode_group)
 
         controls_group = QGroupBox("Signal parameters")
         controls_layout = QVBoxLayout(controls_group)
@@ -207,7 +262,7 @@ class SignalLabWidget(QWidget):
         self.volume_slider = LabeledSlider(
             "Volume", 0.0, 1.0, 0.2,
             decimals=2,
-            tooltip="Master output volume. Start low.",
+            tooltip="Master output volume (fraction of maximum). Start low.",
         )
 
         for slider, attr in [
@@ -223,6 +278,30 @@ class SignalLabWidget(QWidget):
             controls_layout.addWidget(slider)
 
         root.addWidget(controls_group)
+
+        # FOC-Stim specific controls. Only enabled when FOC-Stim mode is
+        # selected; hidden in a separate group box to keep the UI hierarchy
+        # readable and to make it obvious what belongs to which mode.
+        self._foc_group = QGroupBox("FOC-Stim output limit")
+        foc_layout = QVBoxLayout(self._foc_group)
+        self.foc_amplitude_slider = LabeledSlider(
+            "Amplitude limit (A)",
+            float(limits.WaveformAmpltiudeFOC.min),
+            float(limits.WaveformAmpltiudeFOC.max),
+            FOC_AMPLITUDE_DEFAULT,
+            decimals=3,
+            tooltip=(
+                "Hard upper limit on FOC-Stim output current in Amperes.\n"
+                "The Volume slider above scales the envelope as a fraction of this limit.\n"
+                "Start low. The absolute safety ceiling is "
+                f"{limits.WaveformAmpltiudeFOC.max} A; Signal Lab's default is "
+                f"{FOC_AMPLITUDE_DEFAULT} A."
+            ),
+        )
+        self.foc_amplitude_slider.valueChanged.connect(self._make_setter('_foc_amplitude_limit'))
+        foc_layout.addWidget(self.foc_amplitude_slider)
+        self._foc_group.setEnabled(False)  # disabled until FOC-Stim mode is selected
+        root.addWidget(self._foc_group)
 
         # Play button row
         button_row = QHBoxLayout()
@@ -320,9 +399,49 @@ class SignalLabWidget(QWidget):
     @Slot(bool)
     def _on_play_toggled(self, checked):
         if checked:
-            self._start_audio()
+            if self._mode == MODE_AUDIO:
+                self._start_audio()
+            else:
+                self._start_focstim()
         else:
-            self._stop_audio()
+            # Stop whichever mode is currently active. Using _active_mode
+            # (rather than _mode) protects against the user switching the
+            # radio button after stop is requested but before the handler runs.
+            if self._active_mode == MODE_FOCSTIM:
+                self._stop_focstim()
+            else:
+                self._stop_audio()
+
+    @Slot(bool)
+    def _on_mode_changed(self, audio_checked):
+        """Radio button toggled. audio_checked=True when Audio is selected."""
+        # Should never fire while playing (we disable the radios), but guard
+        # anyway so the widget can never get into a mode-mismatched state.
+        if self._active_mode is not None:
+            return
+        self._mode = MODE_AUDIO if audio_checked else MODE_FOCSTIM
+        self._foc_group.setEnabled(self._mode == MODE_FOCSTIM)
+        self._update_notice()
+
+    def _update_notice(self):
+        if self._mode == MODE_AUDIO:
+            self._notice.setText(
+                "Audio mode: plays through your computer's default audio output. "
+                "Does NOT drive connected stim hardware. Safe for experimentation."
+            )
+        else:
+            self._notice.setText(
+                "FOC-Stim mode: drives a connected FOC-Stim 4-phase device. "
+                "Main playback must be stopped. All four electrodes are driven "
+                "equally; amplitude soft-starts over 1 second on Play. "
+                "Start with a low Amplitude limit and low Volume."
+            )
+
+    def _set_mode_controls_enabled(self, enabled):
+        """Enable or disable the mode radio buttons. Called to lock mode
+        switching while Play is active."""
+        self._mode_audio_radio.setEnabled(enabled)
+        self._mode_focstim_radio.setEnabled(enabled)
 
     def _start_audio(self):
         try:
@@ -354,8 +473,10 @@ class SignalLabWidget(QWidget):
             self.status_label.setText(f"Error: {exc}")
             return
 
+        self._active_mode = MODE_AUDIO
+        self._set_mode_controls_enabled(False)
         self.play_button.setText("Stop")
-        self.status_label.setText(f"Playing @ {self._samplerate} Hz")
+        self.status_label.setText(f"Playing (audio) @ {self._samplerate} Hz")
         self._update_plots()
 
     @Slot()
@@ -374,7 +495,119 @@ class SignalLabWidget(QWidget):
             self.play_button.blockSignals(False)
         self.play_button.setText("Play")
         self.status_label.setText("Stopped")
+        if self._active_mode == MODE_AUDIO:
+            self._active_mode = None
+            self._set_mode_controls_enabled(True)
+
+    # ------------------------------------------------------------- FOC-Stim
+
+    def _start_focstim(self):
+        """Begin driving the connected FOC-Stim 4-phase device with the Signal
+        Lab envelope. Validates main-pipeline state and device type, shows a
+        QMessageBox on any failure, and leaves the widget in the stopped state
+        if anything goes wrong."""
+        if self._main_window is None:
+            self._focstim_error("Signal Lab was constructed without a main-window reference; "
+                                "FOC-Stim mode is not available in this context.")
+            return
+
+        pulse_tab = getattr(self._main_window, 'tab_pulse_settings', None)
+        if pulse_tab is None:
+            self._focstim_error("Could not find the Pulse Settings tab to read pulse parameters from.")
+            return
+
+        try:
+            pulse_axes = (
+                pulse_tab.axis_pulse_frequency,
+                pulse_tab.axis_pulse_width,
+                pulse_tab.axis_pulse_rise_time,
+                pulse_tab.axis_pulse_interval_random,
+            )
+        except AttributeError as exc:
+            self._focstim_error(f"Pulse Settings tab is missing expected axis attributes: {exc}")
+            return
+
+        algorithm = SignalLabFOCAlgorithm(
+            widget=self,
+            pulse_axes=pulse_axes,
+            waveform_amplitude_amps=self._foc_amplitude_limit,
+        )
+
+        try:
+            ok, message = self._main_window.signal_start_signallab(algorithm)
+        except Exception as exc:
+            logger.exception("signal_start_signallab raised")
+            self._focstim_error(f"Unexpected error starting FOC-Stim output: {exc}")
+            return
+
+        if not ok:
+            self._focstim_error(message or "Failed to start FOC-Stim output.")
+            return
+
+        self._active_mode = MODE_FOCSTIM
+        self._set_mode_controls_enabled(False)
+        self.play_button.setText("Stop")
+        self.status_label.setText(
+            f"Playing (FOC-Stim, limit {self._foc_amplitude_limit:.3f} A, 1s soft-start)"
+        )
+
+    def _stop_focstim(self):
+        """Stop the FOC-Stim device if we started it. Safe to call more than
+        once or when nothing is running."""
+        # Delegate the device teardown to main_window.signal_stop - same path
+        # the main Start/Stop toolbar button uses. signal_stop is idempotent
+        # for our purposes because it checks self.output_device for None.
+        if self._main_window is not None and self._active_mode == MODE_FOCSTIM:
+            try:
+                from qt_ui.mainwindow import PlayState
+                self._main_window.signal_stop(PlayState.STOPPED)
+            except Exception:
+                logger.exception("error stopping FOC-Stim device from Signal Lab")
+
+        if self.play_button.isChecked():
+            self.play_button.blockSignals(True)
+            self.play_button.setChecked(False)
+            self.play_button.blockSignals(False)
+        self.play_button.setText("Play")
+        self.status_label.setText("Stopped")
+        if self._active_mode == MODE_FOCSTIM:
+            self._active_mode = None
+            self._set_mode_controls_enabled(True)
+
+    def _focstim_error(self, message):
+        """Show a modal error, reset the Play button, and do not leave
+        Signal Lab in a half-started state."""
+        logger.warning("Signal Lab FOC-Stim error: %s", message)
+        if self.play_button.isChecked():
+            self.play_button.blockSignals(True)
+            self.play_button.setChecked(False)
+            self.play_button.blockSignals(False)
+        self.play_button.setText("Play")
+        self.status_label.setText("Stopped (error)")
+        QMessageBox.warning(self, "Signal Lab - FOC-Stim mode", message)
+
+    def set_external_play_state(self, playstate):
+        """Called by MainWindow.refresh_play_button_icon whenever playstate
+        changes, so Signal Lab's Play button stays in sync if the user stops
+        the main pipeline from the toolbar while Signal Lab is running in
+        FOC-Stim mode. playstate is a PlayState enum but we only care whether
+        it is STOPPED - we compare by .name to avoid importing PlayState at
+        module load time (would create a circular import)."""
+        is_stopped = getattr(playstate, 'name', None) == 'STOPPED'
+        if is_stopped and self._active_mode == MODE_FOCSTIM:
+            # The main window already tore down self.output_device. All that
+            # is left for us to do is reset our button and re-enable the mode
+            # radios. Do NOT call signal_stop again - it is already stopped.
+            if self.play_button.isChecked():
+                self.play_button.blockSignals(True)
+                self.play_button.setChecked(False)
+                self.play_button.blockSignals(False)
+            self.play_button.setText("Play")
+            self.status_label.setText("Stopped (by main window)")
+            self._active_mode = None
+            self._set_mode_controls_enabled(True)
 
     def closeEvent(self, event):
         self._stop_audio()
+        self._stop_focstim()
         super().closeEvent(event)

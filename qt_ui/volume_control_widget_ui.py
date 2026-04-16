@@ -149,28 +149,6 @@ class Ui_VolumeControlForm(object):
 
         self.verticalLayout.addWidget(self.groupBox_4)
 
-        self.groupBox_3 = QGroupBox(VolumeControlForm)
-        self.groupBox_3.setObjectName(u"groupBox_3")
-        self.formLayout_3 = QFormLayout(self.groupBox_3)
-        self.formLayout_3.setObjectName(u"formLayout_3")
-        self.label_5 = QLabel(self.groupBox_3)
-        self.label_5.setObjectName(u"label_5")
-
-        self.formLayout_3.setWidget(0, QFormLayout.ItemRole.LabelRole, self.label_5)
-
-        self.doubleSpinBox_tau = QDoubleSpinBox(self.groupBox_3)
-        self.doubleSpinBox_tau.setObjectName(u"doubleSpinBox_tau")
-        self.doubleSpinBox_tau.setKeyboardTracking(False)
-        self.doubleSpinBox_tau.setDecimals(0)
-        self.doubleSpinBox_tau.setMinimum(0.000000000000000)
-        self.doubleSpinBox_tau.setMaximum(1000.000000000000000)
-        self.doubleSpinBox_tau.setValue(355.000000000000000)
-
-        self.formLayout_3.setWidget(0, QFormLayout.ItemRole.FieldRole, self.doubleSpinBox_tau)
-
-
-        self.verticalLayout.addWidget(self.groupBox_3)
-
         self.verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
 
         self.verticalLayout.addItem(self.verticalSpacer)
@@ -201,10 +179,5 @@ class Ui_VolumeControlForm(object):
         self.label_4.setText(QCoreApplication.translate("VolumeControlForm", u"Ramp time [seconds]", None))
         self.groupBox_4.setTitle(QCoreApplication.translate("VolumeControlForm", u"Slow start", None))
         self.label_7.setText(QCoreApplication.translate("VolumeControlForm", u"Ramp time [seconds]", None))
-        self.groupBox_3.setTitle(QCoreApplication.translate("VolumeControlForm", u"Volume-frequency adjustment (FOC-Stim only)", None))
-#if QT_CONFIG(tooltip)
-        self.label_5.setToolTip(QCoreApplication.translate("VolumeControlForm", u"<html><head/><body><p>Available on FOC-Stim only. Time constant of the nerves. </p><p>Automatically adjusts the volume when the carrier frequency changes.</p><p>Increase if lower frequencies feel too strong.</p><p>default = 355\u00b5s</p></body></html>", None))
-#endif // QT_CONFIG(tooltip)
-        self.label_5.setText(QCoreApplication.translate("VolumeControlForm", u"Tau [\u00b5s] (?)", None))
     # retranslateUi
 

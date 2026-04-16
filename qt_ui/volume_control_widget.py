@@ -32,8 +32,6 @@ class VolumeControlWidget(QtWidgets.QWidget, Ui_VolumeControlForm):
         # volume set by tcode, used by external applications
         self.axis_external_volume = create_temporal_axis(1.0)
 
-        self.axis_tau = create_constant_axis(settings.tau_us.get())
-
         self.monitor_axis = []
 
         timer = QtCore.QTimer(self)
@@ -45,7 +43,6 @@ class VolumeControlWidget(QtWidgets.QWidget, Ui_VolumeControlForm):
 
         self.doubleSpinBox_volume = None
         self.volume_widget: VolumeWidget = None
-        self.doubleSpinBox_tau.setValue(settings.tau_us.get())
 
         self.last_axis_update_time = time.time()
         self.last_axis_values = (0, 0)
@@ -63,9 +60,6 @@ class VolumeControlWidget(QtWidgets.QWidget, Ui_VolumeControlForm):
 
         self.doubleSpinBox_ramp_target.valueChanged.connect(self.refresh_message)
         self.doubleSpinBox_ramp_rate.valueChanged.connect(self.refresh_message)
-
-        self.tau_controller = AxisController(self.doubleSpinBox_tau)
-        self.tau_controller.link_axis(self.axis_tau)
 
     def link_volume_controls(self, volume_spinbox: QDoubleSpinBox, volume_bar: VolumeWidget):
         self.doubleSpinBox_volume = volume_spinbox
@@ -222,6 +216,5 @@ class VolumeControlWidget(QtWidgets.QWidget, Ui_VolumeControlForm):
         settings.volume_inactivity_time.set(self.doubleSpinBox_inactivity_ramp_time.value())
         settings.volume_ramp_increment_rate.set(self.doubleSpinBox_ramp_rate.value())
         settings.volume_slow_start_time.set(self.doubleSpinBox_slow_start.value())
-        settings.tau_us.set(self.doubleSpinBox_tau.value())
 
 

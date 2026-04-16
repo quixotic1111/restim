@@ -18,8 +18,61 @@ import funscript.collect_funscripts
 logger = logging.getLogger('restim.script_mapping')
 
 
+CATEGORY_3_PHASE = 'Position (3-phase)'
+CATEGORY_4_PHASE = 'Intensity (4-phase)'
+CATEGORY_PULSE = 'Pulse & Frequency'
+CATEGORY_VOLUME = 'Volume'
+CATEGORY_VIBRATION = 'Vibration'
+CATEGORY_UNMAPPED = 'Unmapped'
+
+CATEGORY_ORDER = [
+    CATEGORY_3_PHASE,
+    CATEGORY_4_PHASE,
+    CATEGORY_PULSE,
+    CATEGORY_VOLUME,
+    CATEGORY_VIBRATION,
+    CATEGORY_UNMAPPED,
+]
+
+AXIS_TO_CATEGORY = {
+    AxisEnum.POSITION_ALPHA: CATEGORY_3_PHASE,
+    AxisEnum.POSITION_BETA: CATEGORY_3_PHASE,
+    AxisEnum.POSITION_GAMMA: CATEGORY_3_PHASE,
+
+    AxisEnum.INTENSITY_A: CATEGORY_4_PHASE,
+    AxisEnum.INTENSITY_B: CATEGORY_4_PHASE,
+    AxisEnum.INTENSITY_C: CATEGORY_4_PHASE,
+    AxisEnum.INTENSITY_D: CATEGORY_4_PHASE,
+
+    AxisEnum.CARRIER_FREQUENCY: CATEGORY_PULSE,
+    AxisEnum.PULSE_FREQUENCY: CATEGORY_PULSE,
+    AxisEnum.PULSE_WIDTH: CATEGORY_PULSE,
+    AxisEnum.PULSE_RISE_TIME: CATEGORY_PULSE,
+    AxisEnum.PULSE_INTERVAL_RANDOM: CATEGORY_PULSE,
+    AxisEnum.TAU: CATEGORY_PULSE,
+
+    AxisEnum.VOLUME_API: CATEGORY_VOLUME,
+    AxisEnum.VOLUME_EXTERNAL: CATEGORY_VOLUME,
+    AxisEnum.VOLUME_MASTER: CATEGORY_VOLUME,
+    AxisEnum.VOLUME_INACTIVITY: CATEGORY_VOLUME,
+
+    AxisEnum.VIBRATION_1_FREQUENCY: CATEGORY_VIBRATION,
+    AxisEnum.VIBRATION_1_STRENGTH: CATEGORY_VIBRATION,
+    AxisEnum.VIBRATION_1_LEFT_RIGHT_BIAS: CATEGORY_VIBRATION,
+    AxisEnum.VIBRATION_1_HIGH_LOW_BIAS: CATEGORY_VIBRATION,
+    AxisEnum.VIBRATION_1_RANDOM: CATEGORY_VIBRATION,
+    AxisEnum.VIBRATION_2_FREQUENCY: CATEGORY_VIBRATION,
+    AxisEnum.VIBRATION_2_STRENGTH: CATEGORY_VIBRATION,
+    AxisEnum.VIBRATION_2_LEFT_RIGHT_BIAS: CATEGORY_VIBRATION,
+    AxisEnum.VIBRATION_2_HIGH_LOW_BIAS: CATEGORY_VIBRATION,
+    AxisEnum.VIBRATION_2_RANDOM: CATEGORY_VIBRATION,
+
+    AxisEnum.NONE: CATEGORY_UNMAPPED,
+}
+
+
 class HeaderTreeItem(TreeItem):
-    def __init__(self, parent: TreeItem=None):
+    def __init__(self, parent: TreeItem = None):
         super(HeaderTreeItem, self).__init__(parent)
 
     def data(self, column):
@@ -28,7 +81,7 @@ class HeaderTreeItem(TreeItem):
 
 
 class ResourceCategory(TreeItem):
-    def __init__(self, name: str, parent: TreeItem=None):
+    def __init__(self, name: str, parent: TreeItem = None):
         super(ResourceCategory, self).__init__(parent)
 
         self.name = name
@@ -40,7 +93,7 @@ class ResourceCategory(TreeItem):
 
 
 class FunscriptTreeItem(TreeItem):
-    def __init__(self, resource: funscript.collect_funscripts.Resource, parent: TreeItem=None):
+    def __init__(self, resource: funscript.collect_funscripts.Resource, parent: TreeItem = None):
         super(FunscriptTreeItem, self).__init__(parent)
 
         # self.resource = resource
@@ -48,7 +101,7 @@ class FunscriptTreeItem(TreeItem):
         self.funscript_type = resource.funscript_type()
         self.axis = qt_ui.device_wizard.axes.AxisEnum.NONE
         self.is_removable = False
-        self.first_of_its_kind = False
+        self.enabled = True
 
         # load funscript immediately. This makes the UI feel sluggish on connecting/disconnecting
         # but has the advantage of not requiring any file IO when audio starts.
@@ -97,15 +150,54 @@ class ScriptMappingModel(QAbstractItemModel):
         super(ScriptMappingModel, self).__init__()
 
         self._root = HeaderTreeItem()
-        self._funscripts_manual = ResourceCategory('Funscripts (manual)', self._root)
-        self._root.appendChild(self._funscripts_manual)
-        self._funscripts_auto = ResourceCategory('Funscripts (auto-detected)', self._root)
-        self._root.appendChild(self._funscripts_auto)
+        # Flat source of truth. The visible tree is rebuilt from this list,
+        # grouped into axis categories, sorted by canonical axis order.
+        self._items: list[FunscriptTreeItem] = []
+
+        # Suffixes the user has disabled (e.g. 'e1', 'alpha'). Persisted across
+        # auto-detect rebuilds (e.g. variant switches) so the user's A/B channel
+        # selection survives a swap.
+        self._disabled_suffixes: set[str] = set()
+
+        self._rebuild_tree()
+
+    # ---- internal helpers ------------------------------------------------
+
+    @staticmethod
+    def _category_for_axis(axis: AxisEnum) -> str:
+        return AXIS_TO_CATEGORY.get(axis, CATEGORY_UNMAPPED)
+
+    def _rebuild_tree(self):
+        """Rebuild category tree from the flat `_items` list. Caller must wrap
+        in beginResetModel/endResetModel if views are observing.
+        """
+        self._root.children.clear()
+        grouped: dict[str, list[FunscriptTreeItem]] = {}
+        for item in self._items:
+            cat_name = self._category_for_axis(item.axis)
+            grouped.setdefault(cat_name, []).append(item)
+        for cat_name in CATEGORY_ORDER:
+            items = grouped.get(cat_name, [])
+            if not items:
+                continue
+            items.sort(key=lambda i: (i.axis.value, i.file_name.lower()))
+            cat = ResourceCategory(cat_name, self._root)
+            for item in items:
+                item.parent = cat
+                cat.appendChild(item)
+            self._root.appendChild(cat)
+
+    # ---- QAbstractItemModel API -----------------------------------------
 
     def data(self, index: QModelIndex, role: int = ...) -> typing.Any:
         if not index.isValid():
             return None
 
+        if role == Qt.CheckStateRole:
+            if isinstance(index.internalPointer(), FunscriptTreeItem) and index.column() == 0:
+                item: FunscriptTreeItem = index.internalPointer()
+                return Qt.Checked if item.enabled else Qt.Unchecked
+            return None
         if role == Qt.EditRole:
             item = index.internalPointer()
             return item.edit_data(index.column())
@@ -121,15 +213,31 @@ class ScriptMappingModel(QAbstractItemModel):
             return None
 
     def setData(self, index: QModelIndex, value: typing.Any, role: int = ...) -> bool:
-        # print('setData', index.row(), index.column(), value)
+        if role == Qt.CheckStateRole:
+            if isinstance(index.internalPointer(), FunscriptTreeItem) and index.column() == 0:
+                item: FunscriptTreeItem = index.internalPointer()
+                new_enabled = Qt.CheckState(value) == Qt.Checked
+                if item.enabled != new_enabled:
+                    item.enabled = new_enabled
+                    if item.funscript_type:
+                        if new_enabled:
+                            self._disabled_suffixes.discard(item.funscript_type)
+                        else:
+                            self._disabled_suffixes.add(item.funscript_type)
+                    self.dataChanged.emit(index, index, [role])
+                return True
         if role == Qt.EditRole:
             if isinstance(index.internalPointer(), FunscriptTreeItem):
                 if index.column() == 1:
-                    if index.internalPointer().axis != value:
-                        # only emit signals if data actually changed
-                        index.internalPointer().axis = value
-                        self.refresh_active_files()
-                        self.dataChanged.emit(index, index, [role])
+                    item: FunscriptTreeItem = index.internalPointer()
+                    if item.axis != value:
+                        # Axis change may move the item to a different category
+                        # and/or alter the sort order within its category, so
+                        # rebuild the tree under a reset.
+                        self.beginResetModel()
+                        item.axis = value
+                        self._rebuild_tree()
+                        self.endResetModel()
                         return True
         return False
 
@@ -139,11 +247,9 @@ class ScriptMappingModel(QAbstractItemModel):
 
         if index.column() == 0:
             if isinstance(index.internalPointer(), FunscriptTreeItem):
-                if index.internalPointer().first_of_its_kind:
+                if index.internalPointer().has_broken_script():
                     return Qt.ItemIsEnabled
-                else:
-                    return Qt.NoItemFlags
-
+                return Qt.ItemIsEnabled | Qt.ItemIsUserCheckable
             return Qt.ItemIsEnabled
         elif index.column() == 1:
             if isinstance(index.internalPointer(), ResourceCategory):
@@ -156,7 +262,6 @@ class ScriptMappingModel(QAbstractItemModel):
             return Qt.ItemIsEnabled | Qt.ItemIsEditable
         elif index.column() == 2:
             return Qt.ItemIsEnabled
-        # return super(TreeModel, self).flags(index)
 
     def headerData(self, section: int, orientation: Qt.Orientation, role: int = ...) -> typing.Any:
         if orientation == Qt.Horizontal and role == Qt.DisplayRole:
@@ -177,17 +282,23 @@ class ScriptMappingModel(QAbstractItemModel):
             return self.createIndex(row, column, childItem)
         return QModelIndex()
 
-    def parent(self,  index: QModelIndex) -> QModelIndex:
+    def parent(self, index: QModelIndex) -> QModelIndex:
         if not index.isValid():
             return QModelIndex()
 
         childItem = index.internalPointer()
         parentItem = childItem.parentItem()
 
-        if parentItem == self._root:
+        if parentItem is None or parentItem == self._root:
             return QModelIndex()
 
-        return self.createIndex(parentItem.row(), 0, parentItem)
+        # Find parentItem's row within its own parent (the root).
+        grandparent = parentItem.parentItem() or self._root
+        try:
+            row = grandparent.children.index(parentItem)
+        except ValueError:
+            row = 0
+        return self.createIndex(row, 0, parentItem)
 
     def rowCount(self, parent: QModelIndex = QModelIndex()) -> int:
         if parent.column() > 0:
@@ -206,71 +317,83 @@ class ScriptMappingModel(QAbstractItemModel):
         return self._root.columnCount()
 
     def removeRow(self, row: int, parent: QModelIndex = ...) -> bool:
-        # print(parent.internalPointer(), row)
-        self.beginRemoveRows(parent, row, row)
-        parent.internalPointer().removeChild(row)
-        self.endRemoveRows()
-        self.dataChanged.emit(parent, parent, [Qt.EditRole])
-        self.refresh_active_files()
+        if not parent.isValid():
+            return False
+        parent_item = parent.internalPointer()
+        if not isinstance(parent_item, ResourceCategory):
+            return False
+        if row < 0 or row >= len(parent_item.children):
+            return False
+        item = parent_item.children[row]
+        self.beginResetModel()
+        if item in self._items:
+            self._items.remove(item)
+        self._rebuild_tree()
+        self.endResetModel()
         return True
 
+    # ---- public mutators used by MediaSettingsWidget --------------------
+
     def add_funscript_resource_auto(self, item: FunscriptTreeItem):
-        item.parent = self._funscripts_auto
-        self._funscripts_auto.appendChild(item)
+        """Append an auto-detected item. Caller should wrap in beginResetModel
+        / endResetModel if adding in a batch; otherwise call `rebuild()` after.
+        """
+        if item.funscript_type in self._disabled_suffixes:
+            item.enabled = False
+        self._items.append(item)
 
     def add_funscript_resource_manual(self, item: FunscriptTreeItem):
-        item.parent = self._funscripts_manual
+        """Append a user-added item. Caller should wrap in beginResetModel /
+        endResetModel if adding in a batch; otherwise call `rebuild()` after.
+        """
         item.is_removable = True
-        self._funscripts_manual.appendChild(item)
-        self.refresh_active_files()
+        self._items.append(item)
+
+    def rebuild(self):
+        """Force a tree rebuild. Use after batch mutations inside a
+        beginResetModel / endResetModel block.
+        """
+        self._rebuild_tree()
 
     def funscript_conifg(self) -> list[FunscriptTreeItem]:
-        return self._funscripts_manual.children + self._funscripts_auto.children
+        return list(self._items)
 
     def get_config_for_axis(self, axis: AxisEnum) -> FunscriptTreeItem | None:
-        for funscript in self._funscripts_manual.children + self._funscripts_auto.children:
-            if funscript.axis == axis:
+        # Return the first enabled item matching the axis. Items are iterated
+        # in insertion order so manual adds (which come first on load) take
+        # precedence over auto-detected duplicates.
+        for funscript in self._items:
+            if funscript.axis == axis and funscript.enabled:
                 return funscript
         return None
-
-    def refresh_active_files(self):
-        used = {AxisEnum.NONE}
-        for item in self._funscripts_manual.children + self._funscripts_auto.children:
-            use = item.axis not in used
-            used.add(item.axis)
-
-            if use != item.first_of_its_kind:
-                item.first_of_its_kind = use
-                index = self.createIndex(item.row(), 0, item.parent)
-                self.dataChanged.emit(index, index, [Qt.DisplayRole])
 
     def detect_funscripts_from_path(self, search_directories: [str], media_file: str) -> bool:
         """
         :param search_directories: list of strings
         :param media_file: "video.mp4"
-        :return:
+        :return: True if the item set changed
         """
-        dirty = self._funscripts_auto.childCount() > 0
-        self._funscripts_auto.children.clear()
+        auto_items = [i for i in self._items if not i.is_removable]
+        dirty = bool(auto_items)
+        self._items = [i for i in self._items if i.is_removable]
 
         resources = funscript.collect_funscripts.collect_funscripts(search_directories, media_file)
         for res in resources:
-            dirty |= True
-            self.add_funscript_resource_auto(FunscriptTreeItem(res))
+            new_item = FunscriptTreeItem(res)
+            self.add_funscript_resource_auto(new_item)
+            dirty = True
         return dirty
 
-    def clear_auto_detected_funscripts(self):
-        if self._funscripts_auto.childCount():
-            self.beginRemoveRows(self.createIndex(0, 0, self._funscripts_auto), 0, self._funscripts_auto.childCount())
-            self._funscripts_auto.children.clear()
-            self.endRemoveRows()
-            return True
-        return False
+    def clear_auto_detected_funscripts(self) -> bool:
+        auto_items = [i for i in self._items if not i.is_removable]
+        if not auto_items:
+            return False
+        self._items = [i for i in self._items if i.is_removable]
+        return True
 
     def auto_link_funscripts(self, kit: FunscriptKitModel) -> None:
-        for item in self.funscript_conifg():
+        for item in self._items:
             self.auto_link_funscript(kit, item)
-        self.refresh_active_files()
 
     def auto_link_funscript(self, kit: FunscriptKitModel, item: FunscriptTreeItem):
         if item.has_broken_script():

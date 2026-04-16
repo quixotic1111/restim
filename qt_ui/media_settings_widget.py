@@ -12,7 +12,9 @@ from qt_ui.device_wizard.axes import AxisEnum
 
 from PySide6 import QtCore, QtWidgets
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QAbstractItemView, QFileDialog
+from PySide6.QtWidgets import QAbstractItemView, QComboBox, QFileDialog, QHBoxLayout, QLabel, QWidget
+
+from funscript.collect_funscripts import detect_variant_folders
 
 from net.media_source.heresphere import HereSphere
 from net.media_source.interface import MediaConnectionState
@@ -62,7 +64,15 @@ class MediaSettingsWidget(QtWidgets.QWidget, Ui_MediaSettingsWidget, metaclass=_
 
         self.model = ScriptMappingModel()
         self.model.dataChanged.connect(self.on_data_changed)
+        # An axis change moves an item between categories, which is a model
+        # reset rather than a data change. Re-expand and re-propagate the
+        # funscript mapping change so the algorithm factory picks up the new
+        # axis assignment.
+        self.model.modelReset.connect(self._on_model_reset)
         self.treeView.setModel(self.model)
+        # Categories always stay expanded — no collapse affordance.
+        self.treeView.setItemsExpandable(False)
+        self.treeView.setRootIsDecorated(False)
         self.treeView.expandAll()
 
         combobox_items = []
@@ -96,6 +106,21 @@ class MediaSettingsWidget(QtWidgets.QWidget, Ui_MediaSettingsWidget, metaclass=_
         self.add_funscript_button.clicked.connect(self.open_add_funscripts_dialog)
         self.additional_search_paths_button.clicked.connect(self.open_search_paths_dialog)
         self.reload_scripts_button.clicked.connect(self.reload_scripts)
+
+        # Variant selector: shown only when a sibling <scene>_variants/ folder exists.
+        self.available_variants: list[tuple[str, str]] = []
+        self.active_variant: str | None = None
+        self.variant_widget = QWidget(self.widget_3)
+        variant_layout = QHBoxLayout(self.variant_widget)
+        variant_layout.setContentsMargins(0, 0, 0, 0)
+        self.variant_label = QLabel("Variant:", self.variant_widget)
+        self.variant_combobox = QComboBox(self.variant_widget)
+        variant_layout.addWidget(self.variant_label)
+        variant_layout.addWidget(self.variant_combobox)
+        self.horizontalLayout_2.insertWidget(self.horizontalLayout_2.count() - 1, self.variant_widget)
+        self.variant_widget.setVisible(False)
+        self.variant_combobox.currentIndexChanged.connect(self.on_variant_changed)
+
         self.media_index_changed()
 
         self.media_offset_spinbox.valueChanged.connect(self.refresh_media_offset)
@@ -116,6 +141,7 @@ class MediaSettingsWidget(QtWidgets.QWidget, Ui_MediaSettingsWidget, metaclass=_
                 item = FunscriptTreeItem(Resource(pathlib.Path(filename)))
                 self.model.auto_link_funscript(kit, item)
                 self.model.add_funscript_resource_manual(item)
+            self.model.rebuild()
             self.model.endResetModel()
             self.treeView.expandAll()
             self.funscriptMappingChanged.emit()
@@ -131,14 +157,21 @@ class MediaSettingsWidget(QtWidgets.QWidget, Ui_MediaSettingsWidget, metaclass=_
         self.detect_resources_for_media_file(self.loaded_media_path)
 
     def on_data_changed(self, topleft, bottomright, roles):
-        if Qt.EditRole in roles:
+        if Qt.EditRole in roles or Qt.CheckStateRole in roles:
             # print('on data changed', roles, topleft.row(), bottomright.row())
             self.funscriptMappingChanged.emit()
+
+    def _on_model_reset(self):
+        self.treeView.expandAll()
+        self.funscriptMappingChanged.emit()
 
     def media_index_changed(self):
         self.dialogOpened.emit()  # stop audio before possibly modifying important vars.
 
+        self.model.beginResetModel()
         any_funscripts_removed = self.model.clear_auto_detected_funscripts()
+        self.model.rebuild()
+        self.model.endResetModel()
         old_interface = self.media_sync[self.current_index]
         new_interface = self.media_sync[self.comboBox.currentIndex()]
         self.current_index = self.comboBox.currentIndex()
@@ -169,7 +202,10 @@ class MediaSettingsWidget(QtWidgets.QWidget, Ui_MediaSettingsWidget, metaclass=_
             self.connection_status.setText('Connected, no file loaded.')
             self.lineEdit.clear()
         else:
+            self.model.beginResetModel()
             self.model.clear_auto_detected_funscripts()
+            self.model.rebuild()
+            self.model.endResetModel()
             self.connection_status.setText('Attempting to connect...')
             self.lineEdit.clear()
 
@@ -181,28 +217,81 @@ class MediaSettingsWidget(QtWidgets.QWidget, Ui_MediaSettingsWidget, metaclass=_
     def detect_resources_for_media_file(self, new_path):
         self.loaded_media_path = new_path
 
+        variants = detect_variant_folders(new_path) if new_path else []
+        self._update_variant_selector(variants)
+
         dirty = False
         if not new_path:
             # path is empty string.
             self.model.beginResetModel()
             dirty |= self.model.clear_auto_detected_funscripts()
+            self.model.rebuild()
             self.model.endResetModel()
-            self.treeView.expandAll()
         else:
             # path is something
             dirname = os.path.dirname(new_path)
             basename = os.path.basename(new_path)
             extra_paths = settings.additional_search_paths.get()
-            search_paths = [dirname] + extra_paths
+
+            variant_path = dict(variants).get(self.active_variant) if self.active_variant else None
+            if variant_path:
+                # Scope to the selected variant so sibling scripts in the scene
+                # folder do not leak in. collect_funscripts stops at the first
+                # directory that yields matches anyway, but being explicit here
+                # makes the behavior obvious to the user.
+                search_paths = [variant_path]
+            else:
+                search_paths = [dirname] + extra_paths
 
             self.model.beginResetModel()
             dirty |= self.model.clear_auto_detected_funscripts()
             dirty |= self.model.detect_funscripts_from_path(search_paths, basename)
+            # Auto-link must happen before rebuild so items land in the
+            # correct axis category on first render.
+            self.model.auto_link_funscripts(funscript_kit.FunscriptKitModel.load_from_settings())
+            self.model.rebuild()
             self.model.endResetModel()
-            self.treeView.expandAll()
 
-        self.model.auto_link_funscripts(funscript_kit.FunscriptKitModel.load_from_settings())
+        self.treeView.expandAll()
         self.funscriptMappingChanged.emit()
+
+    def _update_variant_selector(self, variants: list[tuple[str, str]]):
+        self.available_variants = variants
+        self.variant_combobox.blockSignals(True)
+        self.variant_combobox.clear()
+        if variants:
+            letters = [letter for letter, _ in variants]
+            for letter in letters:
+                self.variant_combobox.addItem(letter)
+            if self.active_variant in letters:
+                idx = letters.index(self.active_variant)
+            else:
+                idx = 0
+                self.active_variant = letters[0]
+            self.variant_combobox.setCurrentIndex(idx)
+            self.variant_widget.setVisible(True)
+        else:
+            self.active_variant = None
+            self.variant_widget.setVisible(False)
+        self.variant_combobox.blockSignals(False)
+
+    def on_variant_changed(self, index: int):
+        if index < 0 or index >= len(self.available_variants):
+            return
+        new_variant = self.available_variants[index][0]
+        if new_variant == self.active_variant:
+            return
+        self.active_variant = new_variant
+        self.dialogOpened.emit()  # stop audio before rebuilding the axis set
+        self.detect_resources_for_media_file(self.loaded_media_path)
+
+    def select_variant_by_letter(self, letter: str) -> bool:
+        """Select variant by letter (e.g. 'A'). Returns True on success."""
+        letters = [l for l, _ in self.available_variants]
+        if letter not in letters:
+            return False
+        self.variant_combobox.setCurrentIndex(letters.index(letter))
+        return True
 
     def has_media_file_loaded(self):
         return bool(self.loaded_media_path)

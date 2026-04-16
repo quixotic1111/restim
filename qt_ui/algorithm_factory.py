@@ -283,7 +283,8 @@ class AlgorithmFactory:
         return self.mainwindow.tab_volume.axis_external_volume
 
     def get_axis_tau(self):
-        return self.mainwindow.tab_volume.axis_tau
+        return self.get_axis_from_script_mapping(AxisEnum.TAU) or \
+               self.mainwindow.tab_pulse_settings.axis_tau
 
     def get_axis_continuous_carrier_frequency(self):
         default = self.mainwindow.tab_carrier.axis_carrier

@@ -21,6 +21,17 @@ class AxisController(QtCore.QObject):
     def timeout(self):
         if self.script_axis:
             self.set_control_value(self.script_axis.interpolate(time.time()))
+        elif self.internal_axis is not None:
+            # Reflect external writes (T-code) into the spinbox display. Skip
+            # while the user is editing so we don't clobber in-progress input.
+            # Block signals so this update does NOT round-trip through
+            # value_changed → internal_axis.add → modified_by_user.
+            if not self.control.hasFocus():
+                axis_value = self.internal_axis.last_value()
+                if abs(axis_value - self.get_control_value()) > 1e-6:
+                    self.control.blockSignals(True)
+                    self.set_control_value(axis_value)
+                    self.control.blockSignals(False)
 
     def value_changed(self):
         # TODO: what happens on tcode control?
@@ -52,12 +63,13 @@ class AxisController(QtCore.QObject):
     def link_to_internal_axis(self, internal_axis):
         """
         Behavior: control enabled. Whenever user modifies the control, value is inserted in axis.
+        Timer runs to reflect external writes (T-code) back into the spinbox display.
         """
-        self.timer.stop()
         self.script_axis = None
         self.internal_axis = internal_axis
         self.set_control_value(self.internal_axis.interpolate(time.time()))
         self.control.setEnabled(True)
+        self.timer.start()
 
     modified_by_user = QtCore.Signal()
 
