@@ -34,7 +34,6 @@ from device.focstim.proto_device import FOCStimProtoDevice, LSM6DSOX_SAMPLERATE_
 from device.neostim.neostim_device import NeoStim
 from qt_ui.widgets.battery_progress_bar import BatteryProgressBar
 from qt_ui.widgets.icon_with_connection_status import IconWithConnectionStatus
-from qt_ui.widgets.signal_lab_widget import SignalLabWidget
 from stim_math.axis import create_temporal_axis
 
 
@@ -58,14 +57,6 @@ class Window(QMainWindow, Ui_MainWindow):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setupUi(self)
-
-        # Signal Lab: standalone envelope-experimentation tab. Added programmatically
-        # (not via the generated UI) so it does not get clobbered by pyside6-uic
-        # regeneration from designer/mainwindow.ui. Passed self so the widget
-        # can look up tab_pulse_settings (already created by setupUi above) and
-        # drive FOC-Stim hardware when in FOC-Stim output mode.
-        self.tab_signal_lab = SignalLabWidget(main_window=self)
-        self.tabWidget.addTab(self.tab_signal_lab, "Signal Lab")
 
         self.playstate = PlayState.STOPPED
         self.tab_volume.set_play_state(self.playstate)
@@ -418,13 +409,9 @@ class Window(QMainWindow, Ui_MainWindow):
                     self.tab_vibrate,
                     self.tab_details,
                     self.tab_a_b_testing,
-                    self.tab_neostim,
-                    self.tab_signal_lab}
+                    self.tab_neostim}
 
-        # tab_signal_lab is always visible: it owns its own audio output and is
-        # independent of the selected stim device.
-        visible = {self.tab_threephase, self.tab_volume, self.tab_vibrate,
-                   self.tab_details, self.tab_signal_lab}
+        visible = {self.tab_threephase, self.tab_volume, self.tab_vibrate, self.tab_details}
 
         all_widgets = {self.device_volume_display, self.battery_bar, self.foc_device_stats}
         visible_widgets = set()
@@ -592,67 +579,6 @@ class Window(QMainWindow, Ui_MainWindow):
         self.tab_volume.set_play_state(self.playstate)
         self.refresh_play_button_icon()
 
-    def signal_start_signallab(self, algorithm) -> tuple[bool, str]:
-        """
-        Start a FOC-Stim connection driven by a Signal Lab algorithm instead
-        of the normal AlgorithmFactory output. Mirrors the FOC-Stim branch of
-        signal_start() (device creation, connection via wifi/serial, sensor
-        routing) but substitutes the caller-provided algorithm.
-
-        :returns: (ok, message). On failure, ok=False and message is a
-            human-readable error suitable for a QMessageBox.
-        """
-        # Decision #2: refuse if main pipeline is already running. User must
-        # explicitly stop the main playback first.
-        if self.playstate != PlayState.STOPPED or self.output_device is not None:
-            return (False, "Please stop main playback before starting Signal Lab in FOC-Stim mode.")
-
-        device = DeviceConfiguration.from_settings()
-        if device.device_type != DeviceType.FOCSTIM_FOUR_PHASE:
-            return (False,
-                    "Signal Lab FOC-Stim mode requires a FOC-Stim 4-phase device. "
-                    "Configure your device via the setup wizard first.")
-
-        # Begin the soft-start ramp at t=0 right before the connection opens.
-        if hasattr(algorithm, 'mark_start_time'):
-            algorithm.mark_start_time()
-
-        output_device = FOCStimProtoDevice()
-        use_teleplot = qt_ui.settings.focstim_use_teleplot.get()
-        dump_notifications = qt_ui.settings.focstim_dump_notifications_to_file.get()
-        comms_wifi = qt_ui.settings.focstim_communication_wifi.get()
-        if not comms_wifi:
-            serial_port_name = qt_ui.settings.focstim_serial_port.get()
-            output_device.start_serial(serial_port_name, use_teleplot, dump_notifications, algorithm)
-        else:
-            ip = qt_ui.settings.focstim_ip.get()
-            output_device.start_tcp(ip, 55533, use_teleplot, dump_notifications, algorithm)
-
-        if not output_device.is_connected_and_running():
-            return (False, "Failed to connect to FOC-Stim device. Check cable/wifi and try again.")
-
-        self.output_device = output_device
-        self.playstate = PlayState.PLAYING
-        self.tab_volume.set_play_state(self.playstate)
-        self.refresh_play_button_icon()
-
-        # Sensor + telemetry routing - matches the FOC-Stim branch of signal_start.
-        output_device.new_as5311_sensor_data.connect(self.page_sensors.new_as5311_sensor_data_from_device)
-        output_device.new_imu_sensor_data.connect(self.page_sensors.new_imu_sensor_data_from_device)
-        output_device.new_pressure_sensor_data.connect(self.page_sensors.new_pressure_sensor_data_from_device)
-        algorithm.sensor_node = self.page_sensors
-
-        output_device.new_as5311_sensor_data.connect(self.websocket_server.transmit_as5311_data)
-        output_device.new_imu_sensor_data.connect(self.websocket_server.transmit_imu_data)
-        output_device.new_pressure_sensor_data.connect(self.websocket_server.transmit_pressure_data)
-
-        output_device.new_battery_data.connect(self.battery_bar.setValue)
-        output_device.new_device_volume_data.connect(self.device_volume_display.display)
-        output_device.new_utilization_data.connect(self.foc_device_stats.update_utilization)
-        output_device.new_resistance_data.connect(self.foc_device_stats.update_resistance)
-
-        return (True, "")
-
     def autostart_timeout(self):
         print('autostart timeout')
         if self.playstate == PlayState.WAITING_ON_LOAD:
@@ -666,14 +592,6 @@ class Window(QMainWindow, Ui_MainWindow):
         else:
             self.actionStart.setIcon(QtGui.QIcon(":/restim/play_poly.svg"))
             self.actionStart.setText("Start")
-
-        # Notify Signal Lab of the external playstate so its Play button stays
-        # in sync if the user stops the main pipeline from the toolbar while
-        # Signal Lab is running in FOC-Stim mode. hasattr guards the case
-        # where refresh_play_button_icon is called during __init__ before
-        # tab_signal_lab has been created.
-        if hasattr(self, 'tab_signal_lab'):
-            self.tab_signal_lab.set_external_play_state(self.playstate)
 
     def open_setup_wizard(self):
         self.signal_stop(PlayState.STOPPED)
