@@ -102,7 +102,7 @@ fourphase_calibration_a = Setting('calibration_four/a', 0.0, float)
 fourphase_calibration_b = Setting('calibration_four/b', 0.0, float)
 fourphase_calibration_c = Setting('calibration_four/c', 0.0, float)
 fourphase_calibration_d = Setting('calibration_four/d', 0.0, float)
-fourphase_calibration_center = Setting('calibration_four/center', 0.0, float)
+fourphase_calibration_center_reduction = Setting('calibration_four/center_reduction', 0.14, float)
 
 device_config_device_type = Setting('device_configuration/device_type', 0, int)
 device_config_waveform_type = Setting('device_configuration/waveform_type', 1, int)
@@ -153,6 +153,9 @@ udp_localhost_only = Setting("network/udp-localhost-only", False, bool)
 serial_enabled = Setting("network/serial-enabled", False, bool)
 serial_port = Setting("network/serial-port", "COM20", str)
 serial_auto_expand = Setting("network/serial-auto-expand", True, bool)
+rest_enabled = Setting("network/rest-enabled", True, bool)
+rest_port = Setting("network/rest-port", 12348, int)
+rest_localhost_only = Setting("network/rest-localhost-only", False, bool)
 
 
 focstim_serial_port = Setting("focstim/serial_port", '', str)
