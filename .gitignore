@@ -135,3 +135,10 @@ dmypy.json
 # Local development files
 experiments/
 trace/
+
+# macOS Finder metadata
+.DS_Store
+
+# Local runtime config and launcher
+restim.ini
+restim.command
