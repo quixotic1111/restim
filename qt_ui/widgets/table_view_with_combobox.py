@@ -28,7 +28,12 @@ class ComboBoxDelegate(QStyledItemDelegate):
 
     def setEditorData(self, editor: QWidget, index: QtCore.QModelIndex) -> None:
         combobox: QComboBox = editor
+        # Block signals so the initial setCurrentIndex doesn't fire
+        # currentIndexChanged -> commitData + closeEditor before the user
+        # has a chance to interact with the popup.
+        combobox.blockSignals(True)
         combobox.setCurrentIndex(combobox.findData(index.data(Qt.ItemDataRole.EditRole)))
+        combobox.blockSignals(False)
         combobox.showPopup()
 
     def setModelData(self, editor: QWidget, model: QtCore.QAbstractItemModel, index: QtCore.QModelIndex) -> None:
