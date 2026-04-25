@@ -2,7 +2,7 @@ import functools
 import os
 import pathlib
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QTimer
 
 from funscript.collect_funscripts import Resource
 from net.media_source.vlc import VLC
@@ -64,12 +64,12 @@ class MediaSettingsWidget(QtWidgets.QWidget, Ui_MediaSettingsWidget, metaclass=_
 
         self.model = ScriptMappingModel()
         self.model.dataChanged.connect(self.on_data_changed)
-        # An axis change moves an item between categories, which is a model
-        # reset rather than a data change. Re-expand and re-propagate the
-        # funscript mapping change so the algorithm factory picks up the new
-        # axis assignment.
-        self.model.modelReset.connect(self._on_model_reset)
         self.treeView.setModel(self.model)
+        # Connect modelReset *after* setModel so QTreeView's internal reset
+        # slot fires first (clears view state, collapses items); our handler
+        # then runs expandAll on the clean state. Reversing this order would
+        # let the view's reset wipe our expansion, hiding all scripts.
+        self.model.modelReset.connect(self._on_model_reset)
         # Categories always stay expanded — no collapse affordance.
         self.treeView.setItemsExpandable(False)
         self.treeView.setRootIsDecorated(False)
@@ -162,7 +162,11 @@ class MediaSettingsWidget(QtWidgets.QWidget, Ui_MediaSettingsWidget, metaclass=_
             self.funscriptMappingChanged.emit()
 
     def _on_model_reset(self):
-        self.treeView.expandAll()
+        # Defer expandAll to the next event loop tick. QTreeView schedules a
+        # delayed items layout during reset; calling expandAll synchronously
+        # here can race with that layout and leave categories collapsed,
+        # hiding all scripts.
+        QTimer.singleShot(0, self.treeView.expandAll)
         self.funscriptMappingChanged.emit()
 
     def media_index_changed(self):
