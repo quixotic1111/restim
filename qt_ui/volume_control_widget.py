@@ -4,7 +4,7 @@ import time
 import numpy as np
 import math
 from PySide6 import QtCore, QtWidgets
-from PySide6.QtWidgets import QDoubleSpinBox
+from PySide6.QtWidgets import QDoubleSpinBox, QPushButton
 
 from qt_ui.axis_controller import AxisController
 from qt_ui.volume_control_widget_ui import Ui_VolumeControlForm
@@ -20,6 +20,14 @@ class VolumeControlWidget(QtWidgets.QWidget, Ui_VolumeControlForm):
     def __init__(self, parent=None):
         QtWidgets.QWidget.__init__(self, parent)
         self.setupUi(self)
+
+        # Added programmatically so pyside6-uic regeneration of the .ui file
+        # does not clobber it. External volume latches its last value, so if a
+        # T-code sender (e.g. funscript processor at stop) sets V1=0, it stays
+        # zeroed until something writes to it again.
+        self.button_reset_external_volume = QPushButton("Reset external volume (V1) to 100%", self)
+        self.button_reset_external_volume.clicked.connect(self.reset_external_volume)
+        self.verticalLayout.insertWidget(0, self.button_reset_external_volume)
 
         # volume set by tcode
         self.axis_api_volume = create_temporal_axis(1.0)
@@ -190,6 +198,9 @@ class VolumeControlWidget(QtWidgets.QWidget, Ui_VolumeControlForm):
 
     def refresh_master_volume(self, _=None):
         self.axis_master_volume.add(np.clip(self.doubleSpinBox_volume.value() / 100, 0.0, 1.0))
+
+    def reset_external_volume(self):
+        self.axis_external_volume.add(1.0)
 
     def refresh_message(self, _=None):
         try:
