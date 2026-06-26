@@ -133,6 +133,8 @@ class TCodeCommandRouter:
     def route_command(self, cmd: TCodeCommand):
         try:
             route = self.mapping[cmd.axis_identifier]
-            route.axis.add(route.remap(cmd.value), cmd.interval / 1000.0)
+            mapped = route.remap(cmd.value)
+            route.axis.add(mapped, cmd.interval / 1000.0)
+            logger.debug(f'route {cmd.axis_identifier}={cmd.value:.4f} -> axis={mapped:.4f}')
         except KeyError:
-            pass
+            logger.warning(f'no route for T-Code axis {cmd.axis_identifier!r}; mapping keys: {sorted(self.mapping.keys())}')

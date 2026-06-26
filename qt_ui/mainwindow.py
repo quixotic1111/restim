@@ -47,6 +47,17 @@ from qt_ui.device_wizard.enums import DeviceConfiguration, DeviceType, WaveformT
 
 from qt_ui.tcode_command_router import TCodeCommandRouter
 
+from device.focstim.calibration_adapter import FOCStimCalibrationAdapter
+from device.focstim.calibration_algorithm import CalibrationFourphaseAlgorithm
+from qt_ui.calibration.wizard import CalibrationWizard
+from stim_math.audio_gen.switching_algorithm import SwitchingAlgorithm
+from stim_math.calibration.io import load as load_calibration_profile
+from stim_math.calibration.profile import CalibrationProfile
+from stim_math.calibration.session import CalibrationSession
+from version import VERSION as RESTIM_VERSION
+from PySide6.QtGui import QAction
+import math as _math
+
 logger = logging.getLogger('restim.main')
 
 
@@ -185,8 +196,28 @@ class Window(QMainWindow, Ui_MainWindow):
 
         self.output_device = None
 
+        # Internal media source needs to know when TCode traffic is live so it
+        # can flip its reported state to PLAYING (so the audio_gen mute guard
+        # unmutes the carrier). page_media is created during setupUi above.
+        _internal_source = next(
+            (s for s in self.page_media.media_sync if s.is_internal()),
+            None,
+        )
+
+        # The internal Live-Control pattern generator counts as activity too, so
+        # selecting Internal + Start drives output without an external T-code
+        # source (e.g. to calibrate electrodes). Only mark activity when the
+        # generated position actually CHANGES, so the mute guard still silences a
+        # static / at-rest pattern (its original purpose).
+        self._internal_source = _internal_source
+        self._last_pattern_pos = None
+        self.motion_3.position_updated.connect(self._note_pattern_activity)
+        self.motion_4.position_updated.connect(self._note_pattern_activity)
+
         self.websocket_server = net.websocketserver.WebSocketServer(self)
         self.websocket_server.new_tcode_command.connect(self.tcode_command_router.route_command)
+        if _internal_source is not None:
+            self.websocket_server.new_tcode_command.connect(_internal_source.notify_activity)
 
         self.websocket_server.incoming_as5311_data.connect(self.page_sensors.new_as5311_sensor_data_from_network)
         self.websocket_server.incoming_imu_data.connect(self.page_sensors.new_imu_sensor_data_from_network)
@@ -199,12 +230,18 @@ class Window(QMainWindow, Ui_MainWindow):
 
         self.tcpudp_server = net.tcpudpserver.TcpUdpServer(self)
         self.tcpudp_server.new_tcode_command.connect(self.tcode_command_router.route_command)
+        if _internal_source is not None:
+            self.tcpudp_server.new_tcode_command.connect(_internal_source.notify_activity)
 
         self.serial_proxy = net.serialproxy.SerialProxy(self)
         self.serial_proxy.new_tcode_command.connect(self.tcode_command_router.route_command)
+        if _internal_source is not None:
+            self.serial_proxy.new_tcode_command.connect(_internal_source.notify_activity)
 
         self.buttplug_wsdm_client = net.buttplug_wsdm_client.ButtplugWsdmClient(self)
         self.buttplug_wsdm_client.new_tcode_command.connect(self.tcode_command_router.route_command)
+        if _internal_source is not None:
+            self.buttplug_wsdm_client.new_tcode_command.connect(_internal_source.notify_activity)
 
         self.tab_volume.set_monitor_axis([
             self.alpha,
@@ -249,6 +286,17 @@ class Window(QMainWindow, Ui_MainWindow):
         self.about_dialog = qt_ui.about_dialog.AboutDialog(self)
         self.actionAbout.triggered.connect(self.open_about_dialog)
 
+        # Calibration wizard menu entry (added programmatically, not in .ui).
+        # Always enabled — the wizard handles its own signal_start internally,
+        # with master volume forced to 0 so the hardware knob can't deliver
+        # surprise signal during entry. Device-type check happens at click time.
+        self._switching_algorithm: SwitchingAlgorithm | None = None
+        self._user_algorithm = None
+        self.actionCalibration_wizard = QAction('Calibration wizard…', self)
+        self.actionCalibration_wizard.setEnabled(True)
+        self.actionCalibration_wizard.triggered.connect(self.open_calibration_wizard)
+        self.menuTools.addAction(self.actionCalibration_wizard)
+
         self.iconMedia = IconWithConnectionStatus(self.actionMedia.icon(), self.toolBar.widgetForAction(self.actionMedia))
         self.actionMedia.setIcon(QIcon(self.iconMedia))
         # self.iconDevice = IconWithConnectionStatus(self.actionDevice.icon(), self.toolBar.widgetForAction(self.actionDevice))
@@ -257,6 +305,11 @@ class Window(QMainWindow, Ui_MainWindow):
         self.connect_signals_slots_actionbar()
 
         self.refresh_device_type()
+
+        # Auto-load any saved calibration profile and push its gain_trims into
+        # the live 4-phase calibration sliders. Runs once at startup; the
+        # wizard re-applies after each successful save.
+        self._load_and_apply_saved_calibration()
 
         config = DeviceConfiguration.from_settings()
         if config.device_type == DeviceType.NONE:
@@ -498,6 +551,18 @@ class Window(QMainWindow, Ui_MainWindow):
         self.refresh_pattern_combobox()
         self.foc_device_stats.reset_utilization()
 
+    def _note_pattern_activity(self, *position):
+        """Mark internal-source activity when the pattern generator's output
+        position changes — keeps the carrier unmuted while a pattern is moving,
+        without an external T-code source. A static position marks no activity,
+        so the mute guard still silences an at-rest pattern."""
+        key = tuple(round(float(v), 4) for v in position)
+        if key != self._last_pattern_pos:
+            self._last_pattern_pos = key
+            src = getattr(self, "_internal_source", None)
+            if src is not None:
+                src.notify_activity()
+
     def pattern_selection_changed(self, index):
         pattern = self.comboBox_patternSelect.currentData()
         self.motion_3.set_pattern(pattern)
@@ -523,6 +588,25 @@ class Window(QMainWindow, Ui_MainWindow):
             load_funscripts=not self.page_media.is_internal(),
         )
         algorithm = algorithm_factory.create_algorithm(device)
+        user_algorithm = algorithm  # keep reference to the unwrapped user algorithm
+
+        # Wrap in SwitchingAlgorithm for FOC-stim 4-phase so the calibration
+        # wizard can hot-swap between user mode and calibration mode without
+        # restarting the device. Default mode is MODE_USER (transparent).
+        if device.device_type == DeviceType.FOCSTIM_FOUR_PHASE:
+            calibration_algorithm = CalibrationFourphaseAlgorithm(
+                media=self.page_media.current_media_sync(),
+                max_amplitude_amps=device.waveform_amplitude_amps,
+                # Sensible defaults — Phase 1 measurement doesn't depend on
+                # exact carrier/pulse values, just on having a stable signal.
+                carrier_frequency_hz=800.0,
+                pulse_frequency_hz=50.0,
+                pulse_width_cycles=4.0,
+                pulse_rise_time_cycles=2.0,
+            )
+            algorithm = SwitchingAlgorithm(user_algorithm, calibration_algorithm)
+            self._switching_algorithm = algorithm
+            self._user_algorithm = user_algorithm
 
         if device.device_type in [
             DeviceType.AUDIO_THREE_PHASE,
@@ -565,7 +649,9 @@ class Window(QMainWindow, Ui_MainWindow):
                 output_device.new_as5311_sensor_data.connect(self.page_sensors.new_as5311_sensor_data_from_device)
                 output_device.new_imu_sensor_data.connect(self.page_sensors.new_imu_sensor_data_from_device)
                 output_device.new_pressure_sensor_data.connect(self.page_sensors.new_pressure_sensor_data_from_device)
-                algorithm.sensor_node = self.page_sensors
+                # sensor_node lives on the user's algorithm (the unwrapped one),
+                # not the SwitchingAlgorithm proxy.
+                user_algorithm.sensor_node = self.page_sensors
 
                 output_device.new_as5311_sensor_data.connect(self.websocket_server.transmit_as5311_data)
                 output_device.new_imu_sensor_data.connect(self.websocket_server.transmit_imu_data)
@@ -596,6 +682,120 @@ class Window(QMainWindow, Ui_MainWindow):
         self.playstate = new_playstate
         self.tab_volume.set_play_state(self.playstate)
         self.refresh_play_button_icon()
+        # Tear down calibration-wizard plumbing — references go stale once the
+        # device is stopped. The menu action stays enabled (wizard handles
+        # its own signal_start when launched fresh).
+        self._switching_algorithm = None
+        self._user_algorithm = None
+
+    def open_calibration_wizard(self):
+        """Launch the FOC-stim calibration wizard.
+
+        Handles signal_start internally with master volume forced to 0 so the
+        device's hardware volume knob cannot deliver surprise signal during
+        the session. Master volume is restored to its pre-wizard level when
+        the wizard closes (device is stopped; click Start to resume).
+        """
+        from PySide6.QtWidgets import QMessageBox
+
+        # Device-type check — wizard only supports 4-phase FOC-stim
+        config = DeviceConfiguration.from_settings()
+        if config.device_type != DeviceType.FOCSTIM_FOUR_PHASE:
+            QMessageBox.information(
+                self,
+                'Calibration wizard',
+                'The calibration wizard supports 4-phase FOC-stim devices '
+                'only. Configure your device via the Setup menu first.',
+            )
+            return
+
+        # Save volume, then zero it before starting signal. The wizard uses
+        # calibration mode (which bypasses master volume) so it doesn't need
+        # the master at any particular value — zeroing it just makes the
+        # hardware knob safe during the session.
+        _pre_wizard_volume = self.tab_volume.doubleSpinBox_volume.value()
+        self.tab_volume.doubleSpinBox_volume.setValue(0)
+
+        # Start signal if not already running. signal_start sets up the
+        # SwitchingAlgorithm for 4-phase FOC-stim, which the wizard needs.
+        if self.output_device is None:
+            self.signal_start()
+
+        if self._switching_algorithm is None or not isinstance(
+            self.output_device, FOCStimProtoDevice,
+        ):
+            QMessageBox.warning(
+                self,
+                'Calibration wizard',
+                'Could not start the FOC-stim device for calibration. '
+                'Verify the device is connected and try again.',
+            )
+            self.tab_volume.doubleSpinBox_volume.setValue(_pre_wizard_volume)
+            return
+
+        adapter = FOCStimCalibrationAdapter(
+            device=self.output_device,
+            switching_algorithm=self._switching_algorithm,
+            firmware_version=RESTIM_VERSION,
+            max_safe_drive=1.0,
+        )
+        session = CalibrationSession(
+            restim_version=RESTIM_VERSION,
+            device_name='FOC-stim',
+        )
+        wizard = CalibrationWizard(adapter, session, parent=self)
+        wizard.wizard_finished.connect(self.signal_stop)
+        wizard.exec()
+        self._load_and_apply_saved_calibration()
+        # Restore master volume then restart signal so the device is immediately
+        # ready for T-code streaming without requiring the user to manually click
+        # Start. signal_stop was called via wizard_finished before exec() returned,
+        # so output_device is guaranteed None here and signal_start() is safe.
+        self.tab_volume.doubleSpinBox_volume.setValue(_pre_wizard_volume)
+        self.signal_start()
+
+    def _load_and_apply_saved_calibration(self) -> None:
+        """Read ~/.restim/calibration.json (if present) and apply gain_trims.
+
+        Called once at startup and again after each wizard exit. Silently
+        no-ops if no profile exists or if the profile fails validation —
+        the wizard remains the only way to produce a profile, so a missing
+        one is expected on first launch.
+        """
+        try:
+            profile, result = load_calibration_profile()
+        except Exception:
+            logger.exception('failed to load calibration profile')
+            return
+        if profile is None:
+            # Normal case before any wizard run; not an error.
+            logger.debug(f'no calibration profile to apply: {"; ".join(result.errors)}')
+            return
+        if not result.ok:
+            logger.warning(
+                f'calibration profile has issues, skipping apply: {result.errors}'
+            )
+            return
+        self._apply_calibration_profile(profile)
+
+    def _apply_calibration_profile(self, profile: CalibrationProfile) -> None:
+        """Log the calibration profile that was loaded.
+
+        The gain_trims are intentionally NOT pushed into the A/B/C/D spinboxes.
+        Funscript Tools reads calibration.json directly and bakes the values
+        into the rendered electrode funscripts during processing. Applying them
+        here as well would double-apply the correction (once in FT's mastering
+        chain, once in restim's output stage), reducing output further than
+        intended. Leave the spinboxes at whatever the user has manually set.
+        """
+        loaded: list[str] = []
+        for name, electrode in profile.electrodes.items():
+            gain = electrode.gain_trim
+            if gain > 0:
+                db = 20.0 * _math.log10(gain)
+                loaded.append(f'{name}={db:+.2f}dB (gain={gain:.3f})')
+        if loaded:
+            logger.info(f'calibration profile loaded (not applied to spinboxes): {", ".join(loaded)}')
 
     def autostart_timeout(self):
         print('autostart timeout')

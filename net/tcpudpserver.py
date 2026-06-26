@@ -74,6 +74,7 @@ class TcpUdpServer(QtCore.QObject):
             datagram = self.udp_socket.receiveDatagram()
             msg = datagram.data()
             msg = msg.data().decode('utf-8')
+            logger.debug('UDP rx: %r', msg[:200])
             for cmd in re.split('\\s|\n|\r', msg):
                 if len(cmd) < 3:
                     continue
