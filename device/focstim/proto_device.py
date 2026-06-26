@@ -410,6 +410,9 @@ class FOCStimProtoDevice(QObject, OutputDevice):
                 power_total=notif.output_power,
                 power_skin=notif.output_power_skin,
             )
+        # Surface per-electrode RMS current to in-app consumers (the calibration
+        # wizard reads this during Phase 1 to balance from measured current).
+        self.new_current_data.emit(notif.rms_a, notif.rms_b, notif.rms_c, notif.rms_d)
 
     def handle_notification_output_resistance(self, notif: NotificationOutputResistance):
         a = notif.resistance_a + 1j * notif.reluctance_a
@@ -539,5 +542,6 @@ class FOCStimProtoDevice(QObject, OutputDevice):
     new_battery_data = Signal(float)  # TODO: more battery stats
     new_device_volume_data = Signal(float)
     new_resistance_data = Signal(complex, complex, complex, complex)
+    new_current_data = Signal(float, float, float, float)  # per-electrode RMS amps
     new_utilization_data = Signal(float, float) # transformer, voltage
 
