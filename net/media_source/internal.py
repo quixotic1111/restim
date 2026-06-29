@@ -47,9 +47,23 @@ class Internal(QObject, MediaSourceInterface, metaclass=_InternalMeta):
         self._enabled = False
 
     def state(self) -> MediaConnectionState:
-        if time.time() - self._last_activity_time < self.ACTIVITY_TIMEOUT_S:
-            return MediaConnectionState.CONNECTED_AND_PLAYING
-        return MediaConnectionState.CONNECTED_BUT_NO_FILE_LOADED
+        # NOTE (2026-06-28): the activity-gated variant below muted the
+        # FOC-stim *pulse* output (audio_gen/pulse_based.py zeroes the pulse
+        # envelope when media.is_playing() is False) during a live UDP T-code
+        # drive — notify_activity wasn't registering as "playing" for the
+        # streamed path, so a real bench/on-body stream came through silent
+        # (axes/spin-boxes updated, but position + electrodes frozen). Revert
+        # to restim's original always-playing behavior so Internal + a live
+        # stream actually generates. Re-introduces the idle steady-tone (only
+        # when Internal is selected with NOTHING driving); that's the lesser
+        # problem and irrelevant while streaming. Proper fix later: drive
+        # notify_activity from where commands are actually applied
+        # (TCodeCommandRouter.route_command), not the transport signal wiring.
+        return MediaConnectionState.CONNECTED_AND_PLAYING
+        # --- activity-gated (disabled, see above) ---
+        # if time.time() - self._last_activity_time < self.ACTIVITY_TIMEOUT_S:
+        #     return MediaConnectionState.CONNECTED_AND_PLAYING
+        # return MediaConnectionState.CONNECTED_BUT_NO_FILE_LOADED
 
     def is_enabled(self) -> bool:
         return True
