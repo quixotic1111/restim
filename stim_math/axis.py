@@ -143,6 +143,27 @@ class WriteProtectedAxis(Axis):
         pass
 
 
+class OffsetAxis(AbstractAxis):
+    """Read-through wrapper adding a constant offset to another axis.
+
+    Used to overlay the calibration profile's per-electrode gain trims
+    (as dB) on top of the user-owned 4-phase A/B/C/D power axes without
+    touching the spinbox values. Writes pass through to the wrapped
+    axis so live UI edits keep working."""
+    def __init__(self, inner: AbstractAxis, offset: float):
+        self.inner = inner
+        self.offset = float(offset)
+
+    def add(self, value, interval=0.0):
+        self.inner.add(value, interval)
+
+    def interpolate(self, timestamp):
+        return self.inner.interpolate(timestamp) + self.offset
+
+    def last_value(self):
+        return self.inner.last_value() + self.offset
+
+
 class ConstantAxis(AbstractAxis):
     def __init__(self, init_value):
         self.value = init_value

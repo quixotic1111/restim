@@ -98,6 +98,12 @@ threephase_map_to_edge_length = Setting('threephase_transform/map_to_edge_length
 threephase_map_to_edge_invert = Setting('threephase_transform/map_to_edge_invert', False, bool)
 threephase_exponent = NonPersistentSetting(0.0)
 
+# Apply the calibration profile's per-electrode gain_trims (from
+# ~/.restim/calibration.json) as dB offsets on the 4-phase output.
+# Set False ONLY if the trims are already baked upstream (Funscript
+# Tools' opt-in bake_gain) — otherwise they'd apply twice.
+calibration_apply_gain_trims = Setting('calibration/apply_gain_trims', True, bool)
+
 fourphase_calibration_a = Setting('calibration_four/a', 0.0, float)
 fourphase_calibration_b = Setting('calibration_four/b', 0.0, float)
 fourphase_calibration_c = Setting('calibration_four/c', 0.0, float)

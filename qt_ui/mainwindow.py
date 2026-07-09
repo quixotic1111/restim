@@ -306,9 +306,11 @@ class Window(QMainWindow, Ui_MainWindow):
 
         self.refresh_device_type()
 
-        # Auto-load any saved calibration profile and push its gain_trims into
-        # the live 4-phase calibration sliders. Runs once at startup; the
-        # wizard re-applies after each successful save.
+        # Auto-load any saved calibration profile and stage its gain_trims
+        # as dB offsets for the 4-phase output stage (spinboxes stay
+        # user-owned; the algorithm factory overlays the offsets). Runs
+        # once at startup; the wizard re-applies after each save.
+        self.calibration_trims_db = {}
         self._load_and_apply_saved_calibration()
 
         config = DeviceConfiguration.from_settings()
@@ -779,23 +781,40 @@ class Window(QMainWindow, Ui_MainWindow):
         self._apply_calibration_profile(profile)
 
     def _apply_calibration_profile(self, profile: CalibrationProfile) -> None:
-        """Log the calibration profile that was loaded.
+        """Stage the profile's gain_trims for the 4-phase output stage.
 
-        The gain_trims are intentionally NOT pushed into the A/B/C/D spinboxes.
-        Funscript Tools reads calibration.json directly and bakes the values
-        into the rendered electrode funscripts during processing. Applying them
-        here as well would double-apply the correction (once in FT's mastering
-        chain, once in restim's output stage), reducing output further than
-        intended. Leave the spinboxes at whatever the user has manually set.
+        History: this used to be log-only, on the assumption that Funscript
+        Tools bakes the trims into its rendered electrode funscripts. It
+        doesn't — FT's bake_gain is opt-in and default-off ("current
+        balancing is a device concern"), so the trims were applied by
+        NOBODY and the wizard's measurements were inert (found 2026-07-08
+        chasing persistent E3/E4 heaviness).
+
+        The trims are still NOT pushed into the A/B/C/D spinboxes — those
+        stay user-owned. Instead they're staged here as dB offsets and the
+        algorithm factory overlays them (OffsetAxis) on the calibrate axes
+        at signal build. The double-apply escape hatch is the
+        calibration/apply_gain_trims setting: turn it off if you enable
+        FT's bake_gain.
         """
-        loaded: list[str] = []
+        self.calibration_trims_db = {}
+        if not qt_ui.settings.calibration_apply_gain_trims.get():
+            logger.info('calibration gain_trims present but '
+                        'calibration/apply_gain_trims=false — not applied '
+                        '(assumed baked upstream)')
+            return
+        staged: list[str] = []
         for name, electrode in profile.electrodes.items():
-            gain = electrode.gain_trim
-            if gain > 0:
-                db = 20.0 * _math.log10(gain)
-                loaded.append(f'{name}={db:+.2f}dB (gain={gain:.3f})')
-        if loaded:
-            logger.info(f'calibration profile loaded (not applied to spinboxes): {", ".join(loaded)}')
+            # attenuation-only by construction (wizard normalizes), but
+            # clamp defensively: never boost, never -inf
+            gain = min(max(electrode.gain_trim, 1e-3), 1.0)
+            db = 20.0 * _math.log10(gain)
+            self.calibration_trims_db[name] = db
+            if abs(db) > 0.01:
+                staged.append(f'{name}={db:+.2f}dB (gain={gain:.3f})')
+        if staged:
+            logger.info('calibration gain_trims staged for 4-phase output: '
+                        + ", ".join(staged))
 
     def autostart_timeout(self):
         print('autostart timeout')

@@ -13,7 +13,7 @@ from stim_math.audio_gen.params import *
 from qt_ui.models.funscript_kit import FunscriptKitModel
 from qt_ui.models.script_mapping import ScriptMappingModel
 from qt_ui.device_wizard.axes import AxisEnum
-from stim_math.axis import create_precomputed_axis, AbstractTimestampMapper, create_constant_axis, AbstractMediaSync
+from stim_math.axis import create_precomputed_axis, AbstractTimestampMapper, create_constant_axis, AbstractMediaSync, OffsetAxis
 
 
 class AlgorithmFactory:
@@ -183,6 +183,23 @@ class AlgorithmFactory:
         )
         return algorithm
 
+    def _fourphase_calibrate_with_trims(self) -> FourphaseCalibrationParams:
+        """The user's A/B/C/D power axes, with the calibration profile's
+        gain_trims overlaid as dB offsets (staged by the mainwindow from
+        ~/.restim/calibration.json). Spinboxes stay untouched; no profile
+        (or apply_gain_trims=false) → plain pass-through."""
+        cal = self.mainwindow.tab_fourphase.calibrate_params
+        trims = getattr(self.mainwindow, 'calibration_trims_db', {}) or {}
+        if not any(abs(v) > 0.01 for v in trims.values()):
+            return cal
+        return FourphaseCalibrationParams(
+            a=OffsetAxis(cal.a, trims.get('E1', 0.0)),
+            b=OffsetAxis(cal.b, trims.get('E2', 0.0)),
+            c=OffsetAxis(cal.c, trims.get('E3', 0.0)),
+            d=OffsetAxis(cal.d, trims.get('E4', 0.0)),
+            center_reduction=cal.center_reduction,
+        )
+
     def create_focstim_4phase_pulsebased(self, device: DeviceConfiguration) -> AudioGenerationAlgorithm:
         algorithm = FOCStimFourphaseAlgorithm(
             self.media_sync,
@@ -194,7 +211,7 @@ class AlgorithmFactory:
                     self.get_axis_intensity_d(),
                 ),
                 # transform=self.mainwindow.tab_threephase.transform_params,
-                calibrate=self.mainwindow.tab_fourphase.calibrate_params,
+                calibrate=self._fourphase_calibrate_with_trims(),
                 volume=VolumeParams(
                     api=self.get_axis_volume_api(),
                     master=self.get_axis_volume_master(),
