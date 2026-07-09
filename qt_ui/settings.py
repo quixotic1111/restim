@@ -1,10 +1,21 @@
 from PySide6.QtCore import QSettings
 import os
 
+# Config directory. RESTIM_CONFIG_DIR (env var, or `--config-dir DIR` on the
+# command line — restim.py translates it to the env var before Qt imports)
+# fully isolates an instance: restim.ini, restim.log and calibration.json all
+# live there. Unset = the working directory, the historical behavior. This is
+# what lets a second restim instance run simultaneously (own ports, own
+# device, own calibration) without fighting the first.
+_config_dir = os.environ.get('RESTIM_CONFIG_DIR') or os.getcwd()
+
+
+def config_dir() -> str:
+    return _config_dir
+
 
 def get_settings_instance():
-    cwd = os.getcwd()
-    path = os.path.join(cwd, 'restim.ini')
+    path = os.path.join(_config_dir, 'restim.ini')
     return QSettings(path, QSettings.IniFormat)
 
 

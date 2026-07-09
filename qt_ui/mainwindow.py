@@ -956,7 +956,7 @@ class Window(QMainWindow, Ui_MainWindow):
 
 
 def run():
-    log_path = os.getcwd()
+    log_path = os.environ.get('RESTIM_CONFIG_DIR') or os.getcwd()
     logging.basicConfig(filename=os.path.join(log_path, 'restim.log'), filemode='w')
     logging.getLogger().addHandler(logging.StreamHandler())
     logger = logging.getLogger('restim')

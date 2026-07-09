@@ -22,7 +22,15 @@ logger = logging.getLogger('restim.calibration.io')
 
 
 def default_path() -> Path:
-    """Canonical location for the active calibration profile."""
+    """Canonical location for the active calibration profile.
+
+    RESTIM_CONFIG_DIR (the per-instance config override) relocates it so a
+    second instance keeps its own device's calibration instead of fighting
+    over the shared profile.
+    """
+    base = os.environ.get('RESTIM_CONFIG_DIR')
+    if base:
+        return Path(base) / "calibration.json"
     return Path.home() / ".restim" / "calibration.json"
 
 

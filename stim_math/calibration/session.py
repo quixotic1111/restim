@@ -29,6 +29,9 @@ logger = logging.getLogger('restim.calibration.session')
 
 
 def _partial_path() -> Path:
+    base = os.environ.get('RESTIM_CONFIG_DIR')   # per-instance config override
+    if base:
+        return Path(base) / 'calibration.partial.json'
     return Path.home() / '.restim' / 'calibration.partial.json'
 
 
