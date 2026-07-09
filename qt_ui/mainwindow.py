@@ -809,6 +809,17 @@ class Window(QMainWindow, Ui_MainWindow):
             # clamp defensively: never boost, never -inf
             gain = min(max(electrode.gain_trim, 1e-3), 1.0)
             db = 20.0 * _math.log10(gain)
+            # Safety floor: trims are for BALANCING, and the felt dynamic
+            # range is only ~6-10 dB — a trim past -9 dB doesn't balance an
+            # electrode, it deletes it (threshold), and almost certainly
+            # encodes a corrupted measurement or a runaway wizard slider
+            # (2026-07-08: a saved 0.065 trim made E4 vanish entirely).
+            if db < -9.0:
+                logger.warning(
+                    f'calibration: {name} trim {db:+.1f}dB is beyond the '
+                    f'-9dB balance floor — clamped. Re-run the wizard; if '
+                    f'it persists, the imbalance is physical.')
+                db = -9.0
             self.calibration_trims_db[name] = db
             if abs(db) > 0.01:
                 staged.append(f'{name}={db:+.2f}dB (gain={gain:.3f})')

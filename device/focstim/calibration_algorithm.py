@@ -102,6 +102,13 @@ class CalibrationFourphaseAlgorithm(RemoteGenerationAlgorithm):
         so a subsequent set_drive picks them back up unchanged."""
         self.set_drive(0.0, 0.0, 0.0, 0.0, 0.0)
 
+    @staticmethod
+    def _trim_db(trim: float) -> float:
+        """Linear trim multiplier → dB for the CALIBRATION_4_* wire unit.
+        Clamped to [1e-3, 1] (attenuation-only, no -inf)."""
+        import math
+        return 20.0 * math.log10(min(max(float(trim), 1e-3), 1.0))
+
     def parameter_dict(self) -> dict:
         # NOTE: no media.is_playing() gate here — the calibration wizard
         # manages drive lifecycle explicitly via set_drive() / silence(), and
@@ -122,10 +129,17 @@ class CalibrationFourphaseAlgorithm(RemoteGenerationAlgorithm):
             # Calibration trims are wizard-controlled. Default 1.0 (no effect)
             # so measurement phases don't bias their readings; Phase 3 sets
             # these to slider values so the user feels their adjustments live.
-            AxisType.AXIS_CALIBRATION_4_A: self._trim_a,
-            AxisType.AXIS_CALIBRATION_4_B: self._trim_b,
-            AxisType.AXIS_CALIBRATION_4_C: self._trim_c,
-            AxisType.AXIS_CALIBRATION_4_D: self._trim_d,
+            # The AXIS_CALIBRATION_4_* wire unit is dB (the same axes the
+            # 4-phase A/B/C/D "power [dB]" spinboxes feed) — trims are linear
+            # multipliers, so convert. Sending them raw made the Phase-3
+            # preview a near-no-op (0.5 heard as +0.5 dB instead of −6 dB):
+            # the user drags the slider, feels nothing, drags further, and a
+            # catastrophic trim gets SAVED (found 2026-07-08: E4 ended at
+            # 0.065 = −23.8 dB, electrode felt nonexistent in playback).
+            AxisType.AXIS_CALIBRATION_4_A: self._trim_db(self._trim_a),
+            AxisType.AXIS_CALIBRATION_4_B: self._trim_db(self._trim_b),
+            AxisType.AXIS_CALIBRATION_4_C: self._trim_db(self._trim_c),
+            AxisType.AXIS_CALIBRATION_4_D: self._trim_db(self._trim_d),
             AxisType.AXIS_CALIBRATION_4_REDUCTION_IN_CENTER: 0.0,
         }
 

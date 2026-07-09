@@ -35,12 +35,30 @@ def compute_gain_trims(
     if nonpos:
         return {}, [f"electrode {n}: |Z|={m} is non-positive" for n, m in nonpos]
 
-    reference = sum(magnitudes.values()) / len(magnitudes)
+    # A passive load cannot have negative real impedance — such a reading
+    # is a measurement failure (bad contact, cross-channel leakage, sense
+    # phase error), not data. Leave that electrode untrimmed and keep its
+    # garbage out of the reference so it can't poison the others' trims.
+    # (Found 2026-07-08: E3 measured Z_real = -127 Ω and was silently used.)
+    invalid = {n for n, z in impedances.items() if z.real <= 0}
+    warnings: list[str] = [
+        f"electrode {n}: non-physical reading (Z_real={impedances[n].real:.0f} Ω"
+        f" ≤ 0) — check contact/lead; left untrimmed"
+        for n in sorted(invalid)
+    ]
+    valid_mags = {n: m for n, m in magnitudes.items() if n not in invalid}
+    if not valid_mags:
+        return ({n: 1.0 for n in magnitudes},
+                warnings + ["no physically-valid readings; all trims neutral"])
+
+    reference = sum(valid_mags.values()) / len(valid_mags)
 
     trims: dict[str, float] = {}
-    warnings: list[str] = []
     floor = 1.0 / cap
     for name, mag in magnitudes.items():
+        if name in invalid:
+            trims[name] = 1.0
+            continue
         trim = mag / reference
         if trim > cap:
             warnings.append(
