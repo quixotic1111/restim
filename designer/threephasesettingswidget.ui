@@ -553,6 +553,29 @@
    <header>qt_ui/widgets/spinbox_with_progress_indicator.h</header>
   </customwidget>
  </customwidgets>
+ <tabstops>
+  <tabstop>comboBox_interface</tabstop>
+  <tabstop>neutral</tabstop>
+  <tabstop>right</tabstop>
+  <tabstop>a_power</tabstop>
+  <tabstop>b_power</tabstop>
+  <tabstop>c_power</tabstop>
+  <tabstop>center_reduction</tabstop>
+  <tabstop>center_reduction_reset</tabstop>
+  <tabstop>phase_widget_calibration</tabstop>
+  <tabstop>groupBox_2</tabstop>
+  <tabstop>combobox_type</tabstop>
+  <tabstop>mapToEdge_start</tabstop>
+  <tabstop>mapToEdge_length</tabstop>
+  <tabstop>mapToEdge_invert</tabstop>
+  <tabstop>rotation</tabstop>
+  <tabstop>mirror</tabstop>
+  <tabstop>limit_top</tabstop>
+  <tabstop>limit_bottom</tabstop>
+  <tabstop>limit_left</tabstop>
+  <tabstop>limit_right</tabstop>
+  <tabstop>reset_defaults_button</tabstop>
+ </tabstops>
  <resources>
   <include location="../resources/restim.qrc"/>
  </resources>

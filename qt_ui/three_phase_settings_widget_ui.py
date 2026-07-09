@@ -341,6 +341,26 @@ class Ui_ThreePhaseSettingsWidget(object):
 
         self.gridLayout.addItem(self.verticalSpacer, 3, 0, 1, 1)
 
+        QWidget.setTabOrder(self.comboBox_interface, self.neutral)
+        QWidget.setTabOrder(self.neutral, self.right)
+        QWidget.setTabOrder(self.right, self.a_power)
+        QWidget.setTabOrder(self.a_power, self.b_power)
+        QWidget.setTabOrder(self.b_power, self.c_power)
+        QWidget.setTabOrder(self.c_power, self.center_reduction)
+        QWidget.setTabOrder(self.center_reduction, self.center_reduction_reset)
+        QWidget.setTabOrder(self.center_reduction_reset, self.phase_widget_calibration)
+        QWidget.setTabOrder(self.phase_widget_calibration, self.groupBox_2)
+        QWidget.setTabOrder(self.groupBox_2, self.combobox_type)
+        QWidget.setTabOrder(self.combobox_type, self.mapToEdge_start)
+        QWidget.setTabOrder(self.mapToEdge_start, self.mapToEdge_length)
+        QWidget.setTabOrder(self.mapToEdge_length, self.mapToEdge_invert)
+        QWidget.setTabOrder(self.mapToEdge_invert, self.rotation)
+        QWidget.setTabOrder(self.rotation, self.mirror)
+        QWidget.setTabOrder(self.mirror, self.limit_top)
+        QWidget.setTabOrder(self.limit_top, self.limit_bottom)
+        QWidget.setTabOrder(self.limit_bottom, self.limit_left)
+        QWidget.setTabOrder(self.limit_left, self.limit_right)
+        QWidget.setTabOrder(self.limit_right, self.reset_defaults_button)
 
         self.retranslateUi(ThreePhaseSettingsWidget)
 
