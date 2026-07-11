@@ -441,8 +441,12 @@ class Window(QMainWindow, Ui_MainWindow):
             if config.waveform_type == WaveformType.A_B_TESTING:
                 visible |= {self.tab_a_b_testing}
         if config.device_type == DeviceType.FOCSTIM_THREE_PHASE:
-            visible |= {self.tab_pulse_settings}
-            visible -= {self.tab_vibrate}
+            if config.waveform_type == WaveformType.A_B_TESTING:
+                visible |= {self.tab_a_b_testing}
+                visible -= {self.tab_vibrate}
+            else:
+                visible |= {self.tab_pulse_settings}
+                visible -= {self.tab_vibrate}
             visible_widgets |= {self.device_volume_display, self.battery_bar, self.foc_device_stats}
         if config.device_type == DeviceType.FOCSTIM_FOUR_PHASE:
             visible |= {self.tab_pulse_settings, self.tab_fourphase}

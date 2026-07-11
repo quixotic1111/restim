@@ -34,3 +34,7 @@ class CarrierFrequencyFOC:
 class WaveformAmpltiudeFOC:
     min = 0.01  # Amperes
     max = 0.20
+
+class PulseFrequencyFOC:
+    min = 1
+    max = 100

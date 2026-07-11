@@ -137,6 +137,13 @@ class DeviceSelectionWizard(QWizard):
                     min_freq_foc, max_freq_foc,
                     waveform_ampltiude_amps
                 )
+            elif self.page_focstim_waveform_select.ab_test_radio.isChecked():
+                return DeviceConfiguration(
+                    DeviceType.FOCSTIM_THREE_PHASE,
+                    WaveformType.A_B_TESTING,
+                    min_freq_foc, max_freq_foc,
+                    waveform_ampltiude_amps
+                )
             else:
                 assert False
         elif self.page_device_type.neostim_radio.isChecked():
@@ -154,7 +161,10 @@ class DeviceSelectionWizard(QWizard):
             self.page_device_type.audio_based_radio.setChecked(True)
         if config.device_type == DeviceType.FOCSTIM_THREE_PHASE:
             self.page_device_type.focstim_radio.setChecked(True)
-            self.page_focstim_waveform_select.three_phase_radio.setChecked(True)
+            if config.waveform_type == WaveformType.A_B_TESTING:
+                self.page_focstim_waveform_select.ab_test_radio.setChecked(True)
+            else:
+                self.page_focstim_waveform_select.three_phase_radio.setChecked(True)
         if config.device_type == DeviceType.FOCSTIM_FOUR_PHASE:
             self.page_device_type.focstim_radio.setChecked(True)
             self.page_focstim_waveform_select.four_phase_radio.setChecked(True)

@@ -2,6 +2,7 @@ from __future__ import unicode_literals
 
 from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import QTimer
+import numpy as np
 
 from qt_ui.ab_test_widget_ui import Ui_ABTestWidget
 
@@ -115,6 +116,17 @@ class ABTestWidget(QtWidgets.QWidget, Ui_ABTestWidget):
         set_duty_cycle(
             self.b_duty_cycle,
             self.b_pulse_frequency.value() * self.b_pulse_width.value() / self.b_carrier.value())
+
+        def set_burst_gap(control, burst_gap):
+            burst_gap = np.clip(burst_gap, 0, None)
+            control.setText(f'{1/burst_gap:.1f} Hz / {burst_gap * 1000:.1f} ms')
+
+        set_burst_gap(
+            self.a_burst_gap,
+            1 / self.a_pulse_frequency.value() - self.a_pulse_width.value() / self.a_carrier.value())
+        set_burst_gap(
+            self.b_burst_gap,
+            1 / self.b_pulse_frequency.value() - self.b_pulse_width.value() / self.b_carrier.value())
 
     def save_settings(self):
         # TODO: call me

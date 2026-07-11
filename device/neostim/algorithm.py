@@ -13,7 +13,7 @@ import device.neostim.threephase
 from device.neostim import limits
 
 from stim_math.audio_gen.params import NeoStimParams, NeoStimDebugParams
-from stim_math.audio_gen.various import ThreePhasePosition
+from stim_math.threephase_position import ThreePhasePosition
 from stim_math.axis import AbstractMediaSync
 
 

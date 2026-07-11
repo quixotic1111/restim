@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'focstim_waveform_select.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.8.3
+## Created by: Qt User Interface Compiler version 6.9.3
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -35,6 +35,11 @@ class Ui_WizardPageFocStim(object):
 
         self.verticalLayout.addWidget(self.four_phase_radio)
 
+        self.ab_test_radio = QRadioButton(WizardPageFocStim)
+        self.ab_test_radio.setObjectName(u"ab_test_radio")
+
+        self.verticalLayout.addWidget(self.ab_test_radio)
+
         self.verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
 
         self.verticalLayout.addItem(self.verticalSpacer)
@@ -49,5 +54,6 @@ class Ui_WizardPageFocStim(object):
         WizardPageFocStim.setWindowTitle(QCoreApplication.translate("WizardPageFocStim", u"WizardPage", None))
         self.three_phase_radio.setText(QCoreApplication.translate("WizardPageFocStim", u"Three-phase", None))
         self.four_phase_radio.setText(QCoreApplication.translate("WizardPageFocStim", u"Four-phase", None))
+        self.ab_test_radio.setText(QCoreApplication.translate("WizardPageFocStim", u"A/B test (Three-phase)", None))
     # retranslateUi
 

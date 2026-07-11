@@ -4,10 +4,13 @@ import numpy as np
 
 from stim_math.audio_gen.base_classes import RemoteGenerationAlgorithm
 from stim_math.audio_gen.params import SafetyParamsFOC, FOCStimParams, FourphaseFOCStimParams
-from stim_math.audio_gen.various import FourPhaseIntensity
+from stim_math.fourphase_intensity import FourPhaseIntensity
 from stim_math.axis import AbstractMediaSync
+import stim_math.burst_gap
 from device.focstim.constants_pb2 import AxisType
 from stim_math import limits
+from stim_math.pulse_frequency_calibration import PulseFrequencyCalibration
+from stim_math.tau_calibration import TauCalibration
 
 
 class FOCStimFourphaseAlgorithm(RemoteGenerationAlgorithm):
@@ -51,8 +54,18 @@ class FOCStimFourphaseAlgorithm(RemoteGenerationAlgorithm):
 
         carrier_frequency = self.params.carrier_frequency.interpolate(t)
         carrier_frequency = np.clip(carrier_frequency, minimum_frequency, maximum_frequency)
-        derating = self.frequency_derating_factor(maximum_frequency, carrier_frequency, tau)
-        volume *= np.clip(derating, 0, 1)
+        carrier_calibration = TauCalibration.derating_factor(maximum_frequency, carrier_frequency, tau)
+        volume *= np.clip(carrier_calibration, 0, 1)
+
+        pulse_frequency = self.params.pulse_frequency.interpolate(t)
+        pulse_width = self.params.pulse_width.interpolate(t)
+        if self.params.enable_burst_gap.last_value():
+            pulse_frequency = stim_math.burst_gap.burst_gap_frequency_to_pulse_frequency(carrier_frequency, pulse_frequency, pulse_width)
+
+        if self.params.enable_pulse_frequency_adjustment.last_value():
+            pulse_frequency_calibration = PulseFrequencyCalibration.scale(pulse_frequency)
+            volume *= np.clip(pulse_frequency_calibration, 0, 1)
+
 
         a, b, c, d = self.intensity_params.get_position(t)
 
@@ -76,7 +89,7 @@ class FOCStimFourphaseAlgorithm(RemoteGenerationAlgorithm):
             AxisType.AXIS_ELECTRODE_4_POWER: d,
             AxisType.AXIS_WAVEFORM_AMPLITUDE_AMPS: volume * self.safety_limits.waveform_amplitude_amps,
             AxisType.AXIS_CARRIER_FREQUENCY_HZ: carrier_frequency,
-            AxisType.AXIS_PULSE_FREQUENCY_HZ: self.params.pulse_frequency.interpolate(t),
+            AxisType.AXIS_PULSE_FREQUENCY_HZ: pulse_frequency,
             AxisType.AXIS_PULSE_WIDTH_IN_CYCLES: self.params.pulse_width.interpolate(t),
             AxisType.AXIS_PULSE_RISE_TIME_CYCLES: self.params.pulse_rise_time.interpolate(t),
             AxisType.AXIS_PULSE_INTERVAL_RANDOM_PERCENT: self.params.pulse_interval_random.interpolate(t),
@@ -86,13 +99,3 @@ class FOCStimFourphaseAlgorithm(RemoteGenerationAlgorithm):
             AxisType.AXIS_CALIBRATION_4_D: self.params.calibrate.d.interpolate(t),
             AxisType.AXIS_CALIBRATION_4_REDUCTION_IN_CENTER: self.params.calibrate.center_reduction.interpolate(t),
         }
-
-    def frequency_derating_factor(self, max_frequency, frequency, tau):
-        """
-        :param max_frequency:   carrier frequency at which derating = 1 (i.e. no derating)
-        :param frequency:       carrier frequency of the pulse
-        :param tau:             time constant of the nerves, ~355e-6
-        :return:                volume of the pulse, such that it has equal subjective intensity as a pulse at max carrier frequency.
-        """
-        # this formula follows from Qt = Q0 * (1 + pw/tau)
-        return (frequency * tau + 0.5) / (max_frequency * tau + 0.5)

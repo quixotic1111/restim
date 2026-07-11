@@ -33,6 +33,8 @@ class VolumeControlWidget(QtWidgets.QWidget, Ui_VolumeControlForm):
         self.axis_external_volume = create_temporal_axis(1.0)
 
         self.axis_tau = create_constant_axis(settings.tau_us.get())
+        self.axis_pulse_frequency_adjustment_enable = create_constant_axis(settings.pulse_frequency_calibration_enable.get())
+        self.axis_burst_gap_enable = create_constant_axis(settings.burst_gap_enable.get())
 
         self.monitor_axis = []
 
@@ -66,6 +68,11 @@ class VolumeControlWidget(QtWidgets.QWidget, Ui_VolumeControlForm):
 
         self.tau_controller = AxisController(self.doubleSpinBox_tau)
         self.tau_controller.link_axis(self.axis_tau)
+
+        self.checkBox_pulse_frequency_enable.setChecked(self.axis_pulse_frequency_adjustment_enable.last_value())
+        self.checkBox_pulse_frequency_enable.stateChanged.connect(self.pulse_frequency_calibration_changed)
+        self.checkbox_burst_gap_enable.setChecked(self.axis_burst_gap_enable.last_value())
+        self.checkbox_burst_gap_enable.stateChanged.connect(self.burst_gap_changed)
 
     def link_volume_controls(self, volume_spinbox: QDoubleSpinBox, volume_bar: VolumeWidget):
         self.doubleSpinBox_volume = volume_spinbox
@@ -212,6 +219,12 @@ class VolumeControlWidget(QtWidgets.QWidget, Ui_VolumeControlForm):
         except (ZeroDivisionError, ValueError):
             message = f"time until target: never."
         self.checkBox_ramp_enabled.setText(message)
+
+    def pulse_frequency_calibration_changed(self):
+        self.axis_pulse_frequency_adjustment_enable.add(self.checkBox_pulse_frequency_enable.isChecked())
+
+    def burst_gap_changed(self):
+        self.axis_burst_gap_enable.add(self.checkbox_burst_gap_enable.isChecked())
 
     def refreshSettings(self):
         self.latency = settings.display_latency.get() / 1000.0

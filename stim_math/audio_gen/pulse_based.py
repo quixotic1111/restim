@@ -6,7 +6,8 @@ import stim_math.pulse
 import stim_math.threephase
 from stim_math.audio_gen.base_classes import AudioGenerationAlgorithm
 from stim_math import threephase
-from stim_math.audio_gen.various import ThreePhasePosition, VibrationAlgorithm
+from stim_math.audio_gen.vibration import VibrationAlgorithm
+from stim_math.threephase_position import ThreePhasePosition
 from stim_math.audio_gen.params import ThreephasePulsebasedAlgorithmParams, ThreephaseCalibrationParams, SafetyParams, ThreephaseABTestAlgorithmParams
 from stim_math.axis import AbstractMediaSync
 from stim_math import limits

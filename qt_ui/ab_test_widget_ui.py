@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'abtestwidget.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.8.3
+## Created by: Qt User Interface Compiler version 6.9.3
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -30,6 +30,147 @@ class Ui_ABTestWidget(object):
         self.groupBox.setObjectName(u"groupBox")
         self.gridLayout = QGridLayout(self.groupBox)
         self.gridLayout.setObjectName(u"gridLayout")
+        self.label_6 = QLabel(self.groupBox)
+        self.label_6.setObjectName(u"label_6")
+
+        self.gridLayout.addWidget(self.label_6, 4, 0, 1, 1)
+
+        self.b_rise_time = QDoubleSpinBox(self.groupBox)
+        self.b_rise_time.setObjectName(u"b_rise_time")
+        self.b_rise_time.setKeyboardTracking(False)
+        self.b_rise_time.setMaximum(100.000000000000000)
+        self.b_rise_time.setSingleStep(0.100000000000000)
+
+        self.gridLayout.addWidget(self.b_rise_time, 7, 2, 1, 1)
+
+        self.b_pulse_frequency = QDoubleSpinBox(self.groupBox)
+        self.b_pulse_frequency.setObjectName(u"b_pulse_frequency")
+        self.b_pulse_frequency.setKeyboardTracking(False)
+
+        self.gridLayout.addWidget(self.b_pulse_frequency, 4, 2, 1, 1)
+
+        self.a_duty_cycle = QLabel(self.groupBox)
+        self.a_duty_cycle.setObjectName(u"a_duty_cycle")
+
+        self.gridLayout.addWidget(self.a_duty_cycle, 9, 1, 1, 1)
+
+        self.label_5 = QLabel(self.groupBox)
+        self.label_5.setObjectName(u"label_5")
+
+        self.gridLayout.addWidget(self.label_5, 3, 0, 1, 1)
+
+        self.label_8 = QLabel(self.groupBox)
+        self.label_8.setObjectName(u"label_8")
+
+        self.gridLayout.addWidget(self.label_8, 8, 0, 1, 1)
+
+        self.a_volume = QDoubleSpinBox(self.groupBox)
+        self.a_volume.setObjectName(u"a_volume")
+        self.a_volume.setKeyboardTracking(False)
+        self.a_volume.setMaximum(100.000000000000000)
+        self.a_volume.setSingleStep(0.100000000000000)
+        self.a_volume.setValue(100.000000000000000)
+
+        self.gridLayout.addWidget(self.a_volume, 1, 1, 1, 1)
+
+        self.b_train_duration = QDoubleSpinBox(self.groupBox)
+        self.b_train_duration.setObjectName(u"b_train_duration")
+        self.b_train_duration.setKeyboardTracking(False)
+        self.b_train_duration.setMaximum(100.000000000000000)
+        self.b_train_duration.setSingleStep(0.100000000000000)
+
+        self.gridLayout.addWidget(self.b_train_duration, 2, 2, 1, 1)
+
+        self.label_7 = QLabel(self.groupBox)
+        self.label_7.setObjectName(u"label_7")
+
+        self.gridLayout.addWidget(self.label_7, 5, 0, 1, 1)
+
+        self.a_carrier = QDoubleSpinBox(self.groupBox)
+        self.a_carrier.setObjectName(u"a_carrier")
+        self.a_carrier.setKeyboardTracking(False)
+        self.a_carrier.setMinimum(1.000000000000000)
+        self.a_carrier.setMaximum(9999999.000000000000000)
+        self.a_carrier.setSingleStep(10.000000000000000)
+
+        self.gridLayout.addWidget(self.a_carrier, 3, 1, 1, 1)
+
+        self.label = QLabel(self.groupBox)
+        self.label.setObjectName(u"label")
+
+        self.gridLayout.addWidget(self.label, 1, 0, 1, 1)
+
+        self.b_carrier = QDoubleSpinBox(self.groupBox)
+        self.b_carrier.setObjectName(u"b_carrier")
+        self.b_carrier.setKeyboardTracking(False)
+        self.b_carrier.setMinimum(1.000000000000000)
+        self.b_carrier.setMaximum(9999999.000000000000000)
+        self.b_carrier.setSingleStep(10.000000000000000)
+
+        self.gridLayout.addWidget(self.b_carrier, 3, 2, 1, 1)
+
+        self.b_pulse_interval_random = QDoubleSpinBox(self.groupBox)
+        self.b_pulse_interval_random.setObjectName(u"b_pulse_interval_random")
+        self.b_pulse_interval_random.setKeyboardTracking(False)
+        self.b_pulse_interval_random.setMaximum(100.000000000000000)
+
+        self.gridLayout.addWidget(self.b_pulse_interval_random, 8, 2, 1, 1)
+
+        self.label_3 = QLabel(self.groupBox)
+        self.label_3.setObjectName(u"label_3")
+
+        self.gridLayout.addWidget(self.label_3, 2, 0, 1, 1)
+
+        self.b_pulse_width = QDoubleSpinBox(self.groupBox)
+        self.b_pulse_width.setObjectName(u"b_pulse_width")
+        self.b_pulse_width.setKeyboardTracking(False)
+        self.b_pulse_width.setSingleStep(0.100000000000000)
+
+        self.gridLayout.addWidget(self.b_pulse_width, 5, 2, 1, 1)
+
+        self.a_pulse_width = QDoubleSpinBox(self.groupBox)
+        self.a_pulse_width.setObjectName(u"a_pulse_width")
+        self.a_pulse_width.setKeyboardTracking(False)
+        self.a_pulse_width.setSingleStep(0.100000000000000)
+
+        self.gridLayout.addWidget(self.a_pulse_width, 5, 1, 1, 1)
+
+        self.label_10 = QLabel(self.groupBox)
+        self.label_10.setObjectName(u"label_10")
+
+        self.gridLayout.addWidget(self.label_10, 9, 0, 1, 1)
+
+        self.a_pulse_frequency = QDoubleSpinBox(self.groupBox)
+        self.a_pulse_frequency.setObjectName(u"a_pulse_frequency")
+        self.a_pulse_frequency.setKeyboardTracking(False)
+
+        self.gridLayout.addWidget(self.a_pulse_frequency, 4, 1, 1, 1)
+
+        self.a_train_duration = QDoubleSpinBox(self.groupBox)
+        self.a_train_duration.setObjectName(u"a_train_duration")
+        self.a_train_duration.setKeyboardTracking(False)
+        self.a_train_duration.setMaximum(100.000000000000000)
+        self.a_train_duration.setSingleStep(0.100000000000000)
+
+        self.gridLayout.addWidget(self.a_train_duration, 2, 1, 1, 1)
+
+        self.b_duty_cycle = QLabel(self.groupBox)
+        self.b_duty_cycle.setObjectName(u"b_duty_cycle")
+
+        self.gridLayout.addWidget(self.b_duty_cycle, 9, 2, 1, 1)
+
+        self.label_9 = QLabel(self.groupBox)
+        self.label_9.setObjectName(u"label_9")
+
+        self.gridLayout.addWidget(self.label_9, 7, 0, 1, 1)
+
+        self.a_pulse_interval_random = QDoubleSpinBox(self.groupBox)
+        self.a_pulse_interval_random.setObjectName(u"a_pulse_interval_random")
+        self.a_pulse_interval_random.setKeyboardTracking(False)
+        self.a_pulse_interval_random.setMaximum(100.000000000000000)
+
+        self.gridLayout.addWidget(self.a_pulse_interval_random, 8, 1, 1, 1)
+
         self.b_volume = QDoubleSpinBox(self.groupBox)
         self.b_volume.setObjectName(u"b_volume")
         self.b_volume.setKeyboardTracking(False)
@@ -45,45 +186,11 @@ class Ui_ABTestWidget(object):
 
         self.gridLayout.addWidget(self.b_signal_label, 0, 2, 1, 1)
 
-        self.b_carrier = QDoubleSpinBox(self.groupBox)
-        self.b_carrier.setObjectName(u"b_carrier")
-        self.b_carrier.setKeyboardTracking(False)
-        self.b_carrier.setMinimum(1.000000000000000)
-        self.b_carrier.setMaximum(9999999.000000000000000)
-        self.b_carrier.setSingleStep(10.000000000000000)
+        self.a_signal_label = QLabel(self.groupBox)
+        self.a_signal_label.setObjectName(u"a_signal_label")
+        self.a_signal_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        self.gridLayout.addWidget(self.b_carrier, 3, 2, 1, 1)
-
-        self.label_10 = QLabel(self.groupBox)
-        self.label_10.setObjectName(u"label_10")
-
-        self.gridLayout.addWidget(self.label_10, 9, 0, 1, 1)
-
-        self.label_5 = QLabel(self.groupBox)
-        self.label_5.setObjectName(u"label_5")
-
-        self.gridLayout.addWidget(self.label_5, 3, 0, 1, 1)
-
-        self.a_volume = QDoubleSpinBox(self.groupBox)
-        self.a_volume.setObjectName(u"a_volume")
-        self.a_volume.setKeyboardTracking(False)
-        self.a_volume.setMaximum(100.000000000000000)
-        self.a_volume.setSingleStep(0.100000000000000)
-        self.a_volume.setValue(100.000000000000000)
-
-        self.gridLayout.addWidget(self.a_volume, 1, 1, 1, 1)
-
-        self.label_6 = QLabel(self.groupBox)
-        self.label_6.setObjectName(u"label_6")
-
-        self.gridLayout.addWidget(self.label_6, 4, 0, 1, 1)
-
-        self.b_pulse_width = QDoubleSpinBox(self.groupBox)
-        self.b_pulse_width.setObjectName(u"b_pulse_width")
-        self.b_pulse_width.setKeyboardTracking(False)
-        self.b_pulse_width.setSingleStep(0.100000000000000)
-
-        self.gridLayout.addWidget(self.b_pulse_width, 5, 2, 1, 1)
+        self.gridLayout.addWidget(self.a_signal_label, 0, 1, 1, 1)
 
         self.a_rise_time = QDoubleSpinBox(self.groupBox)
         self.a_rise_time.setObjectName(u"a_rise_time")
@@ -93,112 +200,20 @@ class Ui_ABTestWidget(object):
 
         self.gridLayout.addWidget(self.a_rise_time, 7, 1, 1, 1)
 
-        self.b_rise_time = QDoubleSpinBox(self.groupBox)
-        self.b_rise_time.setObjectName(u"b_rise_time")
-        self.b_rise_time.setKeyboardTracking(False)
-        self.b_rise_time.setMaximum(100.000000000000000)
-        self.b_rise_time.setSingleStep(0.100000000000000)
+        self.label_2 = QLabel(self.groupBox)
+        self.label_2.setObjectName(u"label_2")
 
-        self.gridLayout.addWidget(self.b_rise_time, 7, 2, 1, 1)
+        self.gridLayout.addWidget(self.label_2, 10, 0, 1, 1)
 
-        self.a_pulse_width = QDoubleSpinBox(self.groupBox)
-        self.a_pulse_width.setObjectName(u"a_pulse_width")
-        self.a_pulse_width.setKeyboardTracking(False)
-        self.a_pulse_width.setSingleStep(0.100000000000000)
+        self.a_burst_gap = QLabel(self.groupBox)
+        self.a_burst_gap.setObjectName(u"a_burst_gap")
 
-        self.gridLayout.addWidget(self.a_pulse_width, 5, 1, 1, 1)
+        self.gridLayout.addWidget(self.a_burst_gap, 10, 1, 1, 1)
 
-        self.label_3 = QLabel(self.groupBox)
-        self.label_3.setObjectName(u"label_3")
+        self.b_burst_gap = QLabel(self.groupBox)
+        self.b_burst_gap.setObjectName(u"b_burst_gap")
 
-        self.gridLayout.addWidget(self.label_3, 2, 0, 1, 1)
-
-        self.label = QLabel(self.groupBox)
-        self.label.setObjectName(u"label")
-
-        self.gridLayout.addWidget(self.label, 1, 0, 1, 1)
-
-        self.label_9 = QLabel(self.groupBox)
-        self.label_9.setObjectName(u"label_9")
-
-        self.gridLayout.addWidget(self.label_9, 7, 0, 1, 1)
-
-        self.a_duty_cycle = QLabel(self.groupBox)
-        self.a_duty_cycle.setObjectName(u"a_duty_cycle")
-
-        self.gridLayout.addWidget(self.a_duty_cycle, 9, 1, 1, 1)
-
-        self.b_duty_cycle = QLabel(self.groupBox)
-        self.b_duty_cycle.setObjectName(u"b_duty_cycle")
-
-        self.gridLayout.addWidget(self.b_duty_cycle, 9, 2, 1, 1)
-
-        self.a_carrier = QDoubleSpinBox(self.groupBox)
-        self.a_carrier.setObjectName(u"a_carrier")
-        self.a_carrier.setKeyboardTracking(False)
-        self.a_carrier.setMinimum(1.000000000000000)
-        self.a_carrier.setMaximum(9999999.000000000000000)
-        self.a_carrier.setSingleStep(10.000000000000000)
-
-        self.gridLayout.addWidget(self.a_carrier, 3, 1, 1, 1)
-
-        self.b_pulse_frequency = QDoubleSpinBox(self.groupBox)
-        self.b_pulse_frequency.setObjectName(u"b_pulse_frequency")
-        self.b_pulse_frequency.setKeyboardTracking(False)
-
-        self.gridLayout.addWidget(self.b_pulse_frequency, 4, 2, 1, 1)
-
-        self.label_7 = QLabel(self.groupBox)
-        self.label_7.setObjectName(u"label_7")
-
-        self.gridLayout.addWidget(self.label_7, 5, 0, 1, 1)
-
-        self.a_signal_label = QLabel(self.groupBox)
-        self.a_signal_label.setObjectName(u"a_signal_label")
-        self.a_signal_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-
-        self.gridLayout.addWidget(self.a_signal_label, 0, 1, 1, 1)
-
-        self.a_pulse_frequency = QDoubleSpinBox(self.groupBox)
-        self.a_pulse_frequency.setObjectName(u"a_pulse_frequency")
-        self.a_pulse_frequency.setKeyboardTracking(False)
-
-        self.gridLayout.addWidget(self.a_pulse_frequency, 4, 1, 1, 1)
-
-        self.label_8 = QLabel(self.groupBox)
-        self.label_8.setObjectName(u"label_8")
-
-        self.gridLayout.addWidget(self.label_8, 8, 0, 1, 1)
-
-        self.a_pulse_interval_random = QDoubleSpinBox(self.groupBox)
-        self.a_pulse_interval_random.setObjectName(u"a_pulse_interval_random")
-        self.a_pulse_interval_random.setKeyboardTracking(False)
-        self.a_pulse_interval_random.setMaximum(100.000000000000000)
-
-        self.gridLayout.addWidget(self.a_pulse_interval_random, 8, 1, 1, 1)
-
-        self.b_pulse_interval_random = QDoubleSpinBox(self.groupBox)
-        self.b_pulse_interval_random.setObjectName(u"b_pulse_interval_random")
-        self.b_pulse_interval_random.setKeyboardTracking(False)
-        self.b_pulse_interval_random.setMaximum(100.000000000000000)
-
-        self.gridLayout.addWidget(self.b_pulse_interval_random, 8, 2, 1, 1)
-
-        self.a_train_duration = QDoubleSpinBox(self.groupBox)
-        self.a_train_duration.setObjectName(u"a_train_duration")
-        self.a_train_duration.setKeyboardTracking(False)
-        self.a_train_duration.setMaximum(100.000000000000000)
-        self.a_train_duration.setSingleStep(0.100000000000000)
-
-        self.gridLayout.addWidget(self.a_train_duration, 2, 1, 1, 1)
-
-        self.b_train_duration = QDoubleSpinBox(self.groupBox)
-        self.b_train_duration.setObjectName(u"b_train_duration")
-        self.b_train_duration.setKeyboardTracking(False)
-        self.b_train_duration.setMaximum(100.000000000000000)
-        self.b_train_duration.setSingleStep(0.100000000000000)
-
-        self.gridLayout.addWidget(self.b_train_duration, 2, 2, 1, 1)
+        self.gridLayout.addWidget(self.b_burst_gap, 10, 2, 1, 1)
 
 
         self.verticalLayout.addWidget(self.groupBox)
@@ -227,17 +242,20 @@ class Ui_ABTestWidget(object):
     def retranslateUi(self, ABTestWidget):
         ABTestWidget.setWindowTitle(QCoreApplication.translate("ABTestWidget", u"Form", None))
         self.groupBox.setTitle(QCoreApplication.translate("ABTestWidget", u"A/B testing", None))
-        self.b_signal_label.setText(QCoreApplication.translate("ABTestWidget", u"B signal", None))
-        self.label_10.setText(QCoreApplication.translate("ABTestWidget", u"Duty cycle", None))
-        self.label_5.setText(QCoreApplication.translate("ABTestWidget", u"Carrier frequency [Hz]", None))
         self.label_6.setText(QCoreApplication.translate("ABTestWidget", u"Pulse frequency [Hz]", None))
-        self.label_3.setText(QCoreApplication.translate("ABTestWidget", u"Pulse train duration [s]", None))
-        self.label.setText(QCoreApplication.translate("ABTestWidget", u"Volume [%]", None))
-        self.label_9.setText(QCoreApplication.translate("ABTestWidget", u"Pulse rise time [carrier cycles]", None))
         self.a_duty_cycle.setText(QCoreApplication.translate("ABTestWidget", u"TextLabel", None))
-        self.b_duty_cycle.setText(QCoreApplication.translate("ABTestWidget", u"TextLabel", None))
-        self.label_7.setText(QCoreApplication.translate("ABTestWidget", u"Pulse width [carrier cycles]", None))
-        self.a_signal_label.setText(QCoreApplication.translate("ABTestWidget", u"A signal", None))
+        self.label_5.setText(QCoreApplication.translate("ABTestWidget", u"Carrier frequency [Hz]", None))
         self.label_8.setText(QCoreApplication.translate("ABTestWidget", u"Pulse interval random [%]", None))
+        self.label_7.setText(QCoreApplication.translate("ABTestWidget", u"Pulse width [carrier cycles]", None))
+        self.label.setText(QCoreApplication.translate("ABTestWidget", u"Volume [%]", None))
+        self.label_3.setText(QCoreApplication.translate("ABTestWidget", u"Pulse train duration [s]", None))
+        self.label_10.setText(QCoreApplication.translate("ABTestWidget", u"Duty cycle", None))
+        self.b_duty_cycle.setText(QCoreApplication.translate("ABTestWidget", u"TextLabel", None))
+        self.label_9.setText(QCoreApplication.translate("ABTestWidget", u"Pulse rise time [carrier cycles]", None))
+        self.b_signal_label.setText(QCoreApplication.translate("ABTestWidget", u"B signal", None))
+        self.a_signal_label.setText(QCoreApplication.translate("ABTestWidget", u"A signal", None))
+        self.label_2.setText(QCoreApplication.translate("ABTestWidget", u"1 / Burst gap", None))
+        self.a_burst_gap.setText(QCoreApplication.translate("ABTestWidget", u"TextLabel", None))
+        self.b_burst_gap.setText(QCoreApplication.translate("ABTestWidget", u"TextLabel", None))
     # retranslateUi
 

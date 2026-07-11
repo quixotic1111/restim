@@ -125,6 +125,8 @@ class FOCStimParams:
     pulse_interval_random: AbstractAxis
     pulse_rise_time: AbstractAxis
     tau: AbstractAxis               # µs
+    enable_pulse_frequency_adjustment: AbstractAxis
+    enable_burst_gap: AbstractAxis
 
 @dataclass
 class FourphaseFOCStimParams:
@@ -138,6 +140,33 @@ class FourphaseFOCStimParams:
     pulse_interval_random: AbstractAxis
     pulse_rise_time: AbstractAxis
     tau: AbstractAxis               # µs
+    enable_pulse_frequency_adjustment: AbstractAxis
+    enable_burst_gap: AbstractAxis
+
+
+@dataclass
+class ABTestFOCStimParams:
+    position: ThreephasePositionParams
+    transform: ThreephasePositionTransformParams
+    calibrate: ThreephaseCalibrationParams
+    volume: VolumeParams
+    tau: AbstractAxis
+    enable_pulse_frequency_adjustment: AbstractAxis
+    enable_burst_gap: AbstractAxis
+    a_volume: AbstractAxis
+    a_train_duration: AbstractAxis # s
+    a_carrier_frequency: AbstractAxis  # Hz
+    a_pulse_frequency: AbstractAxis  # Hz
+    a_pulse_width: AbstractAxis  # carrier cycles
+    a_pulse_interval_random: AbstractAxis
+    a_pulse_rise_time: AbstractAxis
+    b_volume: AbstractAxis
+    b_train_duration: AbstractAxis # s
+    b_carrier_frequency: AbstractAxis  # Hz
+    b_pulse_frequency: AbstractAxis  # Hz
+    b_pulse_width: AbstractAxis  # carrier cycles
+    b_pulse_interval_random: AbstractAxis
+    b_pulse_rise_time: AbstractAxis
 
 
 @dataclass

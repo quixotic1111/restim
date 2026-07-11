@@ -4,7 +4,8 @@ import numpy as np
 
 from stim_math import threephase
 from stim_math.audio_gen.base_classes import AudioGenerationAlgorithm
-from stim_math.audio_gen.various import VibrationAlgorithm, ThreePhasePosition
+from stim_math.audio_gen.vibration import VibrationAlgorithm
+from stim_math.threephase_position import ThreePhasePosition
 from stim_math.axis import AbstractMediaSync
 from stim_math.sine_generator import AngleGenerator
 

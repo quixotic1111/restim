@@ -11,9 +11,11 @@ class WizardPageFocStimWaveformSelect(QWizardPage, Ui_WizardPageFocStim):
 
         self.three_phase_radio.toggled.connect(self.completeChanged)
         self.four_phase_radio.toggled.connect(self.completeChanged)
+        self.ab_test_radio.toggled.connect(self.completeChanged)
 
     def isComplete(self) -> bool:
         return any([
             self.three_phase_radio.isChecked(),
             self.four_phase_radio.isChecked(),
+            self.ab_test_radio.isChecked(),
         ])
