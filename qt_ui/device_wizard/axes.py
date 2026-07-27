@@ -37,6 +37,13 @@ class AxisEnum(Enum):
     INTENSITY_C = 62
     INTENSITY_D = 63
 
+    # fourphase field-shape: how much output is reduced when the
+    # commanded position sits in the CENTER of the electrode field.
+    # A live axis in the FOC-stim fourphase algorithm; exposing it to
+    # the kit makes spatial contrast scriptable (0 = flat field,
+    # higher = edges emphasized).
+    CALIBRATION_4_CENTER_REDUCTION = 70
+
 
     def display_name(self) -> str:
         try:
@@ -71,6 +78,9 @@ class AxisEnum(Enum):
                 AxisEnum.INTENSITY_B: 'intensity B',
                 AxisEnum.INTENSITY_C: 'intensity C',
                 AxisEnum.INTENSITY_D: 'intensity D',
+
+                AxisEnum.CALIBRATION_4_CENTER_REDUCTION:
+                    'center reduction (fourphase)',
             }[self]
         except KeyError:
             return f'unknown {self.value}'
@@ -106,6 +116,9 @@ class AxisEnum(Enum):
             AxisEnum.INTENSITY_B: 'INTENSITY_B',
             AxisEnum.INTENSITY_C: 'INTENSITY_C',
             AxisEnum.INTENSITY_D: 'INTENSITY_D',
+
+            AxisEnum.CALIBRATION_4_CENTER_REDUCTION:
+                'CALIBRATION_4_CENTER_REDUCTION',
         }[self]
 
 
@@ -140,5 +153,7 @@ all_axis = [
     AxisEnum.INTENSITY_B,
     AxisEnum.INTENSITY_C,
     AxisEnum.INTENSITY_D,
+
+    AxisEnum.CALIBRATION_4_CENTER_REDUCTION,
 ]
 

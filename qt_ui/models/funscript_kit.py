@@ -36,6 +36,14 @@ defaults = {
     AxisEnum.INTENSITY_B: ('e2', '', 0, 1, True, True),
     AxisEnum.INTENSITY_C: ('e3', '', 0, 1, True, True),
     AxisEnum.INTENSITY_D: ('e4', '', 0, 1, True, True),
+
+    # fourphase field-shape: scripted spatial contrast. Firmware
+    # (main_focstim_v4 SimpleAxis) clamps this axis to [0, 0.2] and
+    # applies it as two-electrode norm shaping — the ruler matches so
+    # a script's full 0..100 spans the real effect range. Falls back
+    # to the calibration tab's constant when no script is mapped.
+    AxisEnum.CALIBRATION_4_CENTER_REDUCTION:
+        ('center_reduction', '', 0, 0.2, True, True),
 }
 
 @dataclass

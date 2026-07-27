@@ -189,15 +189,25 @@ class AlgorithmFactory:
         ~/.restim/calibration.json). Spinboxes stay untouched; no profile
         (or apply_gain_trims=false) → plain pass-through."""
         cal = self.mainwindow.tab_fourphase.calibrate_params
+        # Scripted spatial contrast: a mapped center_reduction funscript
+        # overrides the calibration tab's constant (kit axis
+        # CALIBRATION_4_CENTER_REDUCTION); no script -> constant rules.
+        center = self.get_axis_from_script_mapping(
+            AxisEnum.CALIBRATION_4_CENTER_REDUCTION) or cal.center_reduction
         trims = getattr(self.mainwindow, 'calibration_trims_db', {}) or {}
         if not any(abs(v) > 0.01 for v in trims.values()):
-            return cal
+            if center is cal.center_reduction:
+                return cal
+            return FourphaseCalibrationParams(
+                a=cal.a, b=cal.b, c=cal.c, d=cal.d,
+                center_reduction=center,
+            )
         return FourphaseCalibrationParams(
             a=OffsetAxis(cal.a, trims.get('E1', 0.0)),
             b=OffsetAxis(cal.b, trims.get('E2', 0.0)),
             c=OffsetAxis(cal.c, trims.get('E3', 0.0)),
             d=OffsetAxis(cal.d, trims.get('E4', 0.0)),
-            center_reduction=cal.center_reduction,
+            center_reduction=center,
         )
 
     def create_focstim_4phase_pulsebased(self, device: DeviceConfiguration) -> AudioGenerationAlgorithm:
