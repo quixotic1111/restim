@@ -4,7 +4,8 @@ import numpy as np
 
 from stim_math import threephase
 from stim_math.audio_gen.base_classes import AudioGenerationAlgorithm
-from stim_math.audio_gen.various import VibrationAlgorithm, ThreePhasePosition
+from stim_math.audio_gen.vibration import VibrationAlgorithm
+from stim_math.threephase_position import ThreePhasePosition
 from stim_math.axis import AbstractMediaSync
 from stim_math.sine_generator import AngleGenerator
 
@@ -51,10 +52,6 @@ class ThreePhaseAlgorithm(AudioGenerationAlgorithm):
         # center scaling
         center_calib = threephase.ThreePhaseCenterCalibration(self.params.calibrate.center.last_value())
         volume *= center_calib.get_scale(alpha, beta)
-
-        # exponent transform
-        # transform = ThreePhaseExponentAdjustment(self.params.threephase_exponent.last_value())
-        # volume *= transform.get_scale(alpha, beta)
 
         # hardware calibration
         hw = threephase.ThreePhaseHardwareCalibration(self.params.calibrate.neutral.last_value(),

@@ -127,6 +127,8 @@ class Window(QMainWindow, Ui_MainWindow):
         self.intensity_c = create_temporal_axis(0.0)
         self.intensity_d = create_temporal_axis(0.0)
 
+        self.sensor_suppression = create_temporal_axis(0.0)
+
         self.tcode_command_router = TCodeCommandRouter(
             self.alpha,
             self.beta,
@@ -158,6 +160,8 @@ class Window(QMainWindow, Ui_MainWindow):
             self.intensity_c,
             self.intensity_d,
 
+            self.sensor_suppression,
+
             # TODO: neostim
         )
 
@@ -166,6 +170,7 @@ class Window(QMainWindow, Ui_MainWindow):
         self.graphicsView_threephase.set_transform_params(self.tab_threephase.transform_params)
         self.graphicsView_threephase.mousePositionChanged.connect(self.motion_3.mouse_event)
         self.motion_3.position_updated.connect(self.graphicsView_threephase.set_cursor_position_ab)
+        self.motion_3.path_updated.connect(self.graphicsView_threephase.set_path)
         self.graphicsView_threephase.set_sensor_widget(self.page_sensors)
 
         # fourphase view
@@ -461,6 +466,9 @@ class Window(QMainWindow, Ui_MainWindow):
         # neostim tab
         # TODO
 
+        # sensors tab
+        self.page_sensors.set_sensor_suppression_axis(algorithm_factory.get_axis_sensor_suppression())
+
         if all((not self.page_media.is_internal(),
                 self.page_media.has_media_file_loaded(),
                 self.page_media.autostart_enabled(),
@@ -499,8 +507,12 @@ class Window(QMainWindow, Ui_MainWindow):
             if config.waveform_type == WaveformType.A_B_TESTING:
                 visible |= {self.tab_a_b_testing}
         if config.device_type == DeviceType.FOCSTIM_THREE_PHASE:
-            visible |= {self.tab_pulse_settings}
-            visible -= {self.tab_vibrate}
+            if config.waveform_type == WaveformType.A_B_TESTING:
+                visible |= {self.tab_a_b_testing}
+                visible -= {self.tab_vibrate}
+            else:
+                visible |= {self.tab_pulse_settings}
+                visible -= {self.tab_vibrate}
             visible_widgets |= {self.device_volume_display, self.battery_bar, self.foc_device_stats}
         if config.device_type == DeviceType.FOCSTIM_FOUR_PHASE:
             visible |= {self.tab_pulse_settings, self.tab_fourphase}
@@ -971,6 +983,9 @@ def run():
     sys.excepthook = excepthook
 
     app = QApplication(sys.argv)
+    wayland_app_id = os.environ.get("RESTIM_APP_ID","restim")
+    app.setDesktopFileName(wayland_app_id)
+    app.setApplicationName(wayland_app_id)
     win = Window()
     win.show()
     sys.exit(app.exec())

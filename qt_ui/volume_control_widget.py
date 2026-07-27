@@ -40,6 +40,10 @@ class VolumeControlWidget(QtWidgets.QWidget, Ui_VolumeControlForm):
         # volume set by tcode, used by external applications
         self.axis_external_volume = create_temporal_axis(1.0)
 
+        self.axis_tau = create_constant_axis(settings.tau_us.get())
+        self.axis_pulse_frequency_adjustment_enable = create_constant_axis(settings.pulse_frequency_calibration_enable.get())
+        self.axis_burst_gap_enable = create_constant_axis(settings.burst_gap_enable.get())
+
         self.monitor_axis = []
 
         timer = QtCore.QTimer(self)
@@ -68,6 +72,21 @@ class VolumeControlWidget(QtWidgets.QWidget, Ui_VolumeControlForm):
 
         self.doubleSpinBox_ramp_target.valueChanged.connect(self.refresh_message)
         self.doubleSpinBox_ramp_rate.valueChanged.connect(self.refresh_message)
+
+        self.tau_controller = AxisController(self.doubleSpinBox_tau)
+        self.tau_controller.link_axis(self.axis_tau)
+        # Fork: tau lives on the Pulse settings tab ("Charge response",
+        # script-mappable via AxisEnum.TAU) and algorithm_factory reads
+        # THAT axis. Upstream's v1.64 tau spinbox here would be a second,
+        # dead control for the same setting — hide the row.
+        self.label_5.setVisible(False)
+        self.doubleSpinBox_tau.setVisible(False)
+
+        self.checkBox_pulse_frequency_enable.setChecked(self.axis_pulse_frequency_adjustment_enable.last_value())
+        self.checkBox_pulse_frequency_enable.stateChanged.connect(self.pulse_frequency_calibration_changed)
+        self.checkbox_burst_gap_enable.setChecked(self.axis_burst_gap_enable.last_value())
+        self.checkbox_burst_gap_enable.stateChanged.connect(self.burst_gap_changed)
+
 
     def link_volume_controls(self, volume_spinbox: QDoubleSpinBox, volume_bar: VolumeWidget):
         self.doubleSpinBox_volume = volume_spinbox
@@ -217,6 +236,12 @@ class VolumeControlWidget(QtWidgets.QWidget, Ui_VolumeControlForm):
         except (ZeroDivisionError, ValueError):
             message = f"time until target: never."
         self.checkBox_ramp_enabled.setText(message)
+
+    def pulse_frequency_calibration_changed(self):
+        self.axis_pulse_frequency_adjustment_enable.add(self.checkBox_pulse_frequency_enable.isChecked())
+
+    def burst_gap_changed(self):
+        self.axis_burst_gap_enable.add(self.checkbox_burst_gap_enable.isChecked())
 
     def refreshSettings(self):
         self.latency = settings.display_latency.get() / 1000.0

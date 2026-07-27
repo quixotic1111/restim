@@ -6,7 +6,8 @@ import stim_math.pulse
 import stim_math.threephase
 from stim_math.audio_gen.base_classes import AudioGenerationAlgorithm
 from stim_math import threephase
-from stim_math.audio_gen.various import ThreePhasePosition, VibrationAlgorithm
+from stim_math.audio_gen.vibration import VibrationAlgorithm
+from stim_math.threephase_position import ThreePhasePosition
 from stim_math.audio_gen.params import ThreephasePulsebasedAlgorithmParams, ThreephaseCalibrationParams, SafetyParams, ThreephaseABTestAlgorithmParams
 from stim_math.axis import AbstractMediaSync
 from stim_math import limits
@@ -136,10 +137,6 @@ class DefaultThreePhasePulseBasedAlgorithm(ThreePhasePulseBasedAlgorithmBase):
 
         alpha, beta = self.position_params.get_position(system_time_estimate)
 
-        # exponent transform. TODO: decide whether to keep
-        # transform = ThreePhaseExponentAdjustment(self.params.threephase_exponent.last_value())
-        # volume *= transform.get_scale(alpha, beta)
-
         pulse = PulseInfo(
             self.polarity(),
             self.phase_offset(),
@@ -224,10 +221,6 @@ class ABTestThreePhasePulseBasedAlgorithm(ThreePhasePulseBasedAlgorithmBase):
         pause_duration = pause_duration * np.random.uniform(1 - random, 1 + random)
 
         alpha, beta = self.position_params.get_position(system_time_estimate)
-
-        # exponent transform. TODO: decide whether to keep
-        # transform = ThreePhaseExponentAdjustment(self.params.threephase_exponent.last_value())
-        # volume *= transform.get_scale(alpha, beta)
 
         pulse = PulseInfo(
             self.polarity(),

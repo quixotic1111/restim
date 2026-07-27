@@ -2,6 +2,7 @@ from __future__ import annotations  # multiple return values
 import numpy as np
 
 from device.focstim.fourphase_algorithm import FOCStimFourphaseAlgorithm
+from device.focstim.threephase_ab_algorithm import FOCStimThreephaseABTestAlgorithm
 from device.neostim.algorithm import NeoStimAlgorithm
 from qt_ui.device_wizard.enums import DeviceConfiguration, DeviceType, WaveformType
 from stim_math.audio_gen.base_classes import AudioGenerationAlgorithm
@@ -45,6 +46,8 @@ class AlgorithmFactory:
             else:
                 raise RuntimeError('unknown waveform type')
         elif device.device_type == DeviceType.FOCSTIM_THREE_PHASE:
+            if device.waveform_type == WaveformType.A_B_TESTING:
+                return self.create_focstim_3phase_abtest(device)
             return self.create_focstim_3phase_pulsebased(device)
         elif device.device_type == DeviceType.FOCSTIM_FOUR_PHASE:
             return self.create_focstim_4phase_pulsebased(device)
@@ -174,6 +177,8 @@ class AlgorithmFactory:
                 pulse_interval_random=self.get_axis_pulse_interval_random(),
                 pulse_rise_time=self.get_axis_pulse_rise_time(),
                 tau=self.get_axis_tau(),
+                enable_pulse_frequency_adjustment=self.get_axis_enable_pulse_frequency_adjustment(),
+                enable_burst_gap=self.get_axis_enable_burst_gap(),
             ),
             safety_limits=SafetyParamsFOC(
                 device.min_frequency,
@@ -234,12 +239,57 @@ class AlgorithmFactory:
                 pulse_interval_random=self.get_axis_pulse_interval_random(),
                 pulse_rise_time=self.get_axis_pulse_rise_time(),
                 tau=self.get_axis_tau(),
+                enable_pulse_frequency_adjustment=self.get_axis_enable_pulse_frequency_adjustment(),
+                enable_burst_gap=self.get_axis_enable_burst_gap(),
             ),
             safety_limits=SafetyParamsFOC(
                 device.min_frequency,
                 device.max_frequency,
                 device.waveform_amplitude_amps,
             )
+        )
+        return algorithm
+
+    def create_focstim_3phase_abtest(self, device: DeviceConfiguration) -> AudioGenerationAlgorithm:
+        algorithm = FOCStimThreephaseABTestAlgorithm(
+            self.media_sync,
+            ABTestFOCStimParams(
+                position=ThreephasePositionParams(
+                    self.get_axis_alpha(),
+                    self.get_axis_beta(),
+                ),
+                transform=self.mainwindow.tab_threephase.transform_params,
+                calibrate=self.mainwindow.tab_threephase.calibrate_params,
+                volume=VolumeParams(
+                    api=self.get_axis_volume_api(),
+                    master=self.get_axis_volume_master(),
+                    inactivity=self.get_axis_volume_inactivity(),
+                    external=self.get_axis_volume_external(),
+                ),
+                tau=self.get_axis_tau(),
+                enable_pulse_frequency_adjustment=self.get_axis_enable_pulse_frequency_adjustment(),
+                enable_burst_gap=self.get_axis_enable_burst_gap(),
+                a_volume=self.mainwindow.tab_a_b_testing.axis_a_volume,
+                a_train_duration=self.mainwindow.tab_a_b_testing.axis_a_train_duration,
+                a_carrier_frequency=self.mainwindow.tab_a_b_testing.axis_a_carrier_frequency,
+                a_pulse_frequency=self.mainwindow.tab_a_b_testing.axis_a_pulse_frequency,
+                a_pulse_width=self.mainwindow.tab_a_b_testing.axis_a_pulse_width,
+                a_pulse_interval_random=self.mainwindow.tab_a_b_testing.axis_a_pulse_interval_random,
+                a_pulse_rise_time=self.mainwindow.tab_a_b_testing.axis_a_pulse_rise_time,
+                b_volume=self.mainwindow.tab_a_b_testing.axis_b_volume,
+                b_train_duration=self.mainwindow.tab_a_b_testing.axis_b_train_duration,
+                b_carrier_frequency=self.mainwindow.tab_a_b_testing.axis_b_carrier_frequency,
+                b_pulse_frequency=self.mainwindow.tab_a_b_testing.axis_b_pulse_frequency,
+                b_pulse_width=self.mainwindow.tab_a_b_testing.axis_b_pulse_width,
+                b_pulse_interval_random=self.mainwindow.tab_a_b_testing.axis_b_pulse_interval_random,
+                b_pulse_rise_time=self.mainwindow.tab_a_b_testing.axis_b_pulse_rise_time,
+            ),
+            safety_limits=SafetyParamsFOC(
+                device.min_frequency,
+                device.max_frequency,
+                device.waveform_amplitude_amps,
+            ),
+            waveform_change_callback=self.mainwindow.tab_a_b_testing.test_waveform_changed,
         )
         return algorithm
 
@@ -312,6 +362,12 @@ class AlgorithmFactory:
     def get_axis_tau(self):
         return self.get_axis_from_script_mapping(AxisEnum.TAU) or \
                self.mainwindow.tab_pulse_settings.axis_tau
+
+    def get_axis_enable_pulse_frequency_adjustment(self):
+        return self.mainwindow.tab_volume.axis_pulse_frequency_adjustment_enable
+
+    def get_axis_enable_burst_gap(self):
+        return self.mainwindow.tab_volume.axis_burst_gap_enable
 
     def get_axis_continuous_carrier_frequency(self):
         default = self.mainwindow.tab_carrier.axis_carrier
@@ -441,6 +497,10 @@ class AlgorithmFactory:
 
     def get_axis_neostim_debug(self):
         return self.mainwindow.tab_neostim.axis_debug
+
+    def get_axis_sensor_suppression(self):
+        return self.get_axis_from_script_mapping(AxisEnum.SENSOR_SUPPRESSION) or \
+               self.mainwindow.sensor_suppression
 
     def get_axis_from_script_mapping(self, axis: AxisEnum) -> AbstractAxis | None:
         if not self.load_funscripts:

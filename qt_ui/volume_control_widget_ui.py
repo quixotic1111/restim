@@ -3,7 +3,7 @@
 ################################################################################
 ## Form generated from reading UI file 'volumecontrolwidget.ui'
 ##
-## Created by: Qt User Interface Compiler version 6.9.0
+## Created by: Qt User Interface Compiler version 6.9.3
 ##
 ## WARNING! All changes made in this file will be lost when recompiling UI file!
 ################################################################################
@@ -149,6 +149,48 @@ class Ui_VolumeControlForm(object):
 
         self.verticalLayout.addWidget(self.groupBox_4)
 
+        self.groupBox_6 = QGroupBox(VolumeControlForm)
+        self.groupBox_6.setObjectName(u"groupBox_6")
+        self.formLayout_6 = QFormLayout(self.groupBox_6)
+        self.formLayout_6.setObjectName(u"formLayout_6")
+        self.label_5 = QLabel(self.groupBox_6)
+        self.label_5.setObjectName(u"label_5")
+
+        self.formLayout_6.setWidget(0, QFormLayout.ItemRole.LabelRole, self.label_5)
+
+        self.doubleSpinBox_tau = QDoubleSpinBox(self.groupBox_6)
+        self.doubleSpinBox_tau.setObjectName(u"doubleSpinBox_tau")
+        self.doubleSpinBox_tau.setKeyboardTracking(False)
+        self.doubleSpinBox_tau.setDecimals(0)
+        self.doubleSpinBox_tau.setMinimum(0.000000000000000)
+        self.doubleSpinBox_tau.setMaximum(1000.000000000000000)
+        self.doubleSpinBox_tau.setValue(355.000000000000000)
+
+        self.formLayout_6.setWidget(0, QFormLayout.ItemRole.FieldRole, self.doubleSpinBox_tau)
+
+        self.label_8 = QLabel(self.groupBox_6)
+        self.label_8.setObjectName(u"label_8")
+
+        self.formLayout_6.setWidget(1, QFormLayout.ItemRole.LabelRole, self.label_8)
+
+        self.checkBox_pulse_frequency_enable = QCheckBox(self.groupBox_6)
+        self.checkBox_pulse_frequency_enable.setObjectName(u"checkBox_pulse_frequency_enable")
+
+        self.formLayout_6.setWidget(1, QFormLayout.ItemRole.FieldRole, self.checkBox_pulse_frequency_enable)
+
+        self.label_9 = QLabel(self.groupBox_6)
+        self.label_9.setObjectName(u"label_9")
+
+        self.formLayout_6.setWidget(2, QFormLayout.ItemRole.LabelRole, self.label_9)
+
+        self.checkbox_burst_gap_enable = QCheckBox(self.groupBox_6)
+        self.checkbox_burst_gap_enable.setObjectName(u"checkbox_burst_gap_enable")
+
+        self.formLayout_6.setWidget(2, QFormLayout.ItemRole.FieldRole, self.checkbox_burst_gap_enable)
+
+
+        self.verticalLayout.addWidget(self.groupBox_6)
+
         self.verticalSpacer = QSpacerItem(20, 40, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
 
         self.verticalLayout.addItem(self.verticalSpacer)
@@ -179,5 +221,20 @@ class Ui_VolumeControlForm(object):
         self.label_4.setText(QCoreApplication.translate("VolumeControlForm", u"Ramp time [seconds]", None))
         self.groupBox_4.setTitle(QCoreApplication.translate("VolumeControlForm", u"Slow start", None))
         self.label_7.setText(QCoreApplication.translate("VolumeControlForm", u"Ramp time [seconds]", None))
+        self.groupBox_6.setTitle(QCoreApplication.translate("VolumeControlForm", u"Intensity normalization", None))
+#if QT_CONFIG(tooltip)
+        self.label_5.setToolTip(QCoreApplication.translate("VolumeControlForm", u"<html><head/><body><p>Available on FOC-Stim only. Time constant of the nerves. </p><p>Automatically adjusts the volume when the carrier frequency changes.</p><p>Increase if lower frequencies feel too strong.</p><p>default = 355\u00b5s</p></body></html>", None))
+#endif // QT_CONFIG(tooltip)
+        self.label_5.setText(QCoreApplication.translate("VolumeControlForm", u"Nerve time constant [\u00b5s] (?)", None))
+#if QT_CONFIG(tooltip)
+        self.label_8.setToolTip(QCoreApplication.translate("VolumeControlForm", u"<html><head/><body><p>Available on FOC-Stim only.</p><p>Reduce volume at higher pulse frequencies,<br/>so intensity is independent of frequency.</p><p>Uses hardcoded lookup table.</p></body></html>", None))
+#endif // QT_CONFIG(tooltip)
+        self.label_8.setText(QCoreApplication.translate("VolumeControlForm", u"Pulse frequency normalization (?)", None))
+        self.checkBox_pulse_frequency_enable.setText(QCoreApplication.translate("VolumeControlForm", u"Enable", None))
+#if QT_CONFIG(tooltip)
+        self.label_9.setToolTip(QCoreApplication.translate("VolumeControlForm", u"<html><head/><body><p>Available on FOC-Stim only.</p><p>Interprent the pulse frequency axis as burst gap.</p><p>This makes the subjective frequency of the signal less dependent on the carrier frequency and pulse width.</p></body></html>", None))
+#endif // QT_CONFIG(tooltip)
+        self.label_9.setText(QCoreApplication.translate("VolumeControlForm", u"Burst gap instead of pulse freqeuency (?)", None))
+        self.checkbox_burst_gap_enable.setText(QCoreApplication.translate("VolumeControlForm", u"Enable", None))
     # retranslateUi
 

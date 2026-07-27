@@ -37,6 +37,8 @@ class AxisEnum(Enum):
     INTENSITY_C = 62
     INTENSITY_D = 63
 
+    SENSOR_SUPPRESSION = 70
+
     # fourphase field-shape: how much output is reduced when the
     # commanded position sits in the CENTER of the electrode field.
     # A live axis in the FOC-stim fourphase algorithm; exposing it to
@@ -46,7 +48,6 @@ class AxisEnum(Enum):
     # SENSOR_SUPPRESSION). Persistence keys on settings_key(), so the
     # number is wire-internal only.
     CALIBRATION_4_CENTER_REDUCTION = 100
-
 
     def display_name(self) -> str:
         try:
@@ -81,6 +82,8 @@ class AxisEnum(Enum):
                 AxisEnum.INTENSITY_B: 'intensity B',
                 AxisEnum.INTENSITY_C: 'intensity C',
                 AxisEnum.INTENSITY_D: 'intensity D',
+
+                AxisEnum.SENSOR_SUPPRESSION: 'sensor suppression',
 
                 AxisEnum.CALIBRATION_4_CENTER_REDUCTION:
                     'center reduction (fourphase)',
@@ -120,6 +123,8 @@ class AxisEnum(Enum):
             AxisEnum.INTENSITY_C: 'INTENSITY_C',
             AxisEnum.INTENSITY_D: 'INTENSITY_D',
 
+            AxisEnum.SENSOR_SUPPRESSION: 'SENSOR_SUPPRESSION',
+
             AxisEnum.CALIBRATION_4_CENTER_REDUCTION:
                 'CALIBRATION_4_CENTER_REDUCTION',
         }[self]
@@ -156,6 +161,8 @@ all_axis = [
     AxisEnum.INTENSITY_B,
     AxisEnum.INTENSITY_C,
     AxisEnum.INTENSITY_D,
+
+    AxisEnum.SENSOR_SUPPRESSION,
 
     AxisEnum.CALIBRATION_4_CENTER_REDUCTION,
 ]
