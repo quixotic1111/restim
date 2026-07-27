@@ -134,13 +134,26 @@ class PulseSettingsWidget(QtWidgets.QWidget):
         pulse_interval_random_label = QtWidgets.QLabel("pulse interval random [%]")
         gb_l.addRow(pulse_interval_random_label, pulse_interval_random_slider)
 
+        rise_tooltip = (
+            'Rise and fall ramps share the pulse, so each can last at most half the\n'
+            'pulse width. Rise time above width/2 is silently capped by the envelope\n'
+            'generator (the pulse becomes a pure ramp-up/ramp-down with no plateau).\n'
+            'The "effective rise" row below shows what is actually delivered.'
+        )
         pulse_rise_time_slider = QtWidgets.QDoubleSpinBox(minimum=stim_math.limits.PulseRiseTime.min,
                                                           maximum=stim_math.limits.PulseRiseTime.max)
         pulse_rise_time_slider.setSingleStep(0.1)
         pulse_rise_time_slider.setValue(settings.pulse_rise_time.get())
         pulse_rise_time_slider.setKeyboardTracking(False)
-        pulse_rise_time_label = QtWidgets.QLabel("rise time [carrier cycles]")
+        pulse_rise_time_slider.setToolTip(rise_tooltip)
+        pulse_rise_time_label = QtWidgets.QLabel("rise time [carrier cycles] (?)")
+        pulse_rise_time_label.setToolTip(rise_tooltip)
         gb_l.addRow(pulse_rise_time_label, pulse_rise_time_slider)
+
+        rise_info_label = QtWidgets.QLabel("effective rise (?)")
+        rise_info_label.setToolTip(rise_tooltip)
+        rise_info = QtWidgets.QLabel("placeholder")
+        gb_l.addRow(rise_info_label, rise_info)
 
         details_label = QtWidgets.QLabel("duty cycle (?)")
         details_label.setToolTip('Low duty cycle is best for power efficiency (less skin irritation).')
@@ -222,6 +235,7 @@ class PulseSettingsWidget(QtWidgets.QWidget):
         self.pulse_freq_slider = pulse_freq_slider
         self.pulse_width_slider = pulse_width_slider
         self.details_info = details_info
+        self.rise_info = rise_info
         self.pulse_interval_random = pulse_interval_random_slider
         self.pulse_rise_time = pulse_rise_time_slider
         self.tau_slider = tau_slider
@@ -272,6 +286,19 @@ class PulseSettingsWidget(QtWidgets.QWidget):
         else:
             self.details_info.setStyleSheet('color: red')
             self.details_info.setText(f'{1:.0%}')
+
+        # Effective rise readout. The envelope generator caps each ramp at
+        # half the pulse width (create_pulse_with_ramp_time falls back to a
+        # half-circle when rise >= width/2), so anything above width/2 is
+        # silently truncated — surface that instead of hiding it.
+        max_rise = pulse_width / 2
+        if rise_time > max_rise:
+            self.rise_info.setStyleSheet('color: red')
+            self.rise_info.setText(
+                f'{max_rise:.2f} cycles — capped (max is width/2; no plateau left)')
+        else:
+            self.rise_info.setStyleSheet('')
+            self.rise_info.setText(f'{rise_time:.2f} cycles')
 
         # Carrier-frequency derating preview. Uses the same formula as
         # device/focstim/{three,four}phase_algorithm.frequency_derating_factor:
