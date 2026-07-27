@@ -41,8 +41,11 @@ class AxisEnum(Enum):
     # commanded position sits in the CENTER of the electrode field.
     # A live axis in the FOC-stim fourphase algorithm; exposing it to
     # the kit makes spatial contrast scriptable (0 = flat field,
-    # higher = edges emphasized).
-    CALIBRATION_4_CENTER_REDUCTION = 70
+    # higher = edges emphasized). Fork-local axis: numbered from 100
+    # to stay clear of upstream additions (upstream took 70 for
+    # SENSOR_SUPPRESSION). Persistence keys on settings_key(), so the
+    # number is wire-internal only.
+    CALIBRATION_4_CENTER_REDUCTION = 100
 
 
     def display_name(self) -> str:
