@@ -252,5 +252,7 @@ class VolumeControlWidget(QtWidgets.QWidget, Ui_VolumeControlForm):
         settings.volume_inactivity_time.set(self.doubleSpinBox_inactivity_ramp_time.value())
         settings.volume_ramp_increment_rate.set(self.doubleSpinBox_ramp_rate.value())
         settings.volume_slow_start_time.set(self.doubleSpinBox_slow_start.value())
+        settings.pulse_frequency_calibration_enable.set(self.checkBox_pulse_frequency_enable.isChecked())
+        settings.burst_gap_enable.set(self.checkbox_burst_gap_enable.isChecked())
 
 
