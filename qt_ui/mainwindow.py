@@ -259,6 +259,13 @@ class Window(QMainWindow, Ui_MainWindow):
 
         # stop audio when user modifies settings in media tab
         self.page_media.dialogOpened.connect(self.signal_stop)
+        # Variant hot-swap: the swap must stop output (funscripts are baked
+        # into the algorithm at signal_start), but if we were playing, resume
+        # automatically once the new axis set is in place — otherwise Alt+1..4
+        # A/B auditioning means a manual restart on every switch.
+        self.page_media.variantSwapStarted.connect(self._variant_swap_note_playstate)
+        self.page_media.variantSwapped.connect(self._variant_swap_maybe_resume)
+        self._resume_after_variant_swap = False
         self.page_media.funscriptMappingChanged.connect(self.funscript_mapping_changed)
         self.page_media.connectionStatusChanged.connect(self.media_connection_status_changed)
         self.page_media.bake_audio_button.clicked.connect(self.open_write_audio_dialog)
@@ -380,6 +387,16 @@ class Window(QMainWindow, Ui_MainWindow):
     def _select_funscript_variant(self, letter: str):
         if self.page_media.select_variant_by_letter(letter):
             logger.info(f'selected funscript variant {letter}')
+
+    def _variant_swap_note_playstate(self):
+        self._resume_after_variant_swap = self.playstate != PlayState.STOPPED
+
+    def _variant_swap_maybe_resume(self):
+        if self._resume_after_variant_swap:
+            self._resume_after_variant_swap = False
+            if self.output_device is None:   # stop actually happened
+                logger.info('variant swapped — resuming output')
+                self.signal_start()
 
     def update_device_volume(self, value):
         self.last_device_volume = value

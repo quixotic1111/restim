@@ -286,8 +286,16 @@ class MediaSettingsWidget(QtWidgets.QWidget, Ui_MediaSettingsWidget, metaclass=_
         if new_variant == self.active_variant:
             return
         self.active_variant = new_variant
+        # The swap must stop output (the algorithm bakes funscripts in at
+        # signal_start), but the main window can resume automatically:
+        # variantSwapStarted lets it record was-playing BEFORE the stop,
+        # variantSwapped tells it the axis set is rebuilt and safe to
+        # restart. Emitted around the existing stop signal, so with no
+        # listener the behavior is exactly the old stop-and-stay-stopped.
+        self.variantSwapStarted.emit()
         self.dialogOpened.emit()  # stop audio before rebuilding the axis set
         self.detect_resources_for_media_file(self.loaded_media_path)
+        self.variantSwapped.emit()
 
     def select_variant_by_letter(self, letter: str) -> bool:
         """Select variant by letter (e.g. 'A'). Returns True on success."""
@@ -327,5 +335,7 @@ class MediaSettingsWidget(QtWidgets.QWidget, Ui_MediaSettingsWidget, metaclass=_
         settings.media_sync_time_offset_ms.set(self.media_offset_spinbox.value() * 1000)
 
     dialogOpened = QtCore.Signal()  # emitted whenever a dialog is opened which promps audio stop.
+    variantSwapStarted = QtCore.Signal()  # about to swap funscript variant (before the audio stop)
+    variantSwapped = QtCore.Signal()  # variant axis set rebuilt; safe to resume output
     connectionStatusChanged = QtCore.Signal(MediaConnectionState)  # emitted whenever video player connection status changes.
     funscriptMappingChanged = QtCore.Signal()  # emitted whenever new funscript files are added, removed or modified
