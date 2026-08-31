@@ -18,12 +18,24 @@ measured on a phantom 2026-08-30. The tested electrode leads; the other
 three sit at about a third. Isolation is not reachable on this device at
 any command, so these are still the right drive vectors.
 
-What that costs the page: the four judgements are COUPLED. A weak E4
-contributes to every test, including E1's, so "E1 feels weak" is partly a
-statement about the other three, and moving one slider changes how the
-others read. The comparative judgement (E1 vs E2, same shape permuted)
-survives this; an absolute per-electrode reading does not. Prefer
-answering "which of these two feels stronger" over "is this one right".
+What that costs the page is CONTRAST, and nothing else. Writing s_i for an
+electrode's perceptual sensitivity and S for their sum, the wash makes the
+felt intensity of the test on electrode X
+
+    felt_X = (2/3)·s_X + S/3
+
+— affine in s_X. So differences between electrodes survive at exactly 2/3
+scale and the RANKING is untouched: a weak electrode sits equally in every
+test where it is not the leader, shifting the baseline rather than biasing
+any one comparison. The page works; it is 1/3 less sensitive than it would
+be if isolation were possible, so a real imbalance has to be about half
+again as large before it is audible.
+
+What does NOT survive is an absolute reading. "Is E1 right?" has no
+referent here, because the floor under it is the other three. Ask "which
+of these two feels stronger?" instead — that is the question the signal
+can answer, and it is why the page compares against the previously tested
+electrode rather than against silence.
 """
 
 from __future__ import annotations
@@ -69,12 +81,20 @@ class BalancePage(QWizardPage):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setTitle('Per-electrode balance')
+        # "on its own" was not true — this device cannot drive one electrode
+        # alone (see the module docstring). The comparative framing is not
+        # just honesty: it is the only judgement the signal supports, and
+        # comparing against the previous electrode rather than against
+        # silence is what recovers the contrast the wash costs.
         self.setSubTitle(
-            'Click Test next to each electrode to feel it on its own. If any '
-            'feels noticeably stronger or weaker than the others, nudge the '
-            'slider next to it. Skip if everything feels balanced. '
-            'Gain is capped at 1.0× — only attenuation is applied, '
-            'preventing current overload on sensitive electrodes.'
+            'Click Test next to each electrode to bring it forward — the '
+            'others stay quietly present, as this device cannot drive one '
+            'electrode alone. Compare each electrode against the one you '
+            'tested just before, rather than against silence, and nudge the '
+            'slider if one is noticeably stronger or weaker. Skip if '
+            'everything feels balanced. Gain is capped at 1.0× — only '
+            'attenuation is applied, preventing current overload on '
+            'sensitive electrodes.'
         )
 
         self._baseline_trims: dict[str, float] = {}
