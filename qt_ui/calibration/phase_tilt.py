@@ -12,6 +12,20 @@ compensate. If fast feels stronger than slow, push negative.
 The slider sets tilt_db directly in [-12, +12] dB. 0 = no tilt (identity).
 The page is fully skippable — clicking Next without adjusting any slider
 keeps the default zero tilt (no frequency-response correction).
+
+⚠ "Each electrode is tested" overstates what the hardware allows. Like
+Phase 3, this page drives SINGLE_A..D, and the device may not put one lane
+above the sum of the other three: a commanded (1,0,0,0) is delivered as
+roughly (1, 0.37, 0.36, 0.50) — measured on a phantom 2026-08-30. The
+named electrode leads, the other three sit at about a third.
+
+This page is less damaged by that than Phase 3, because the judgement it
+asks for is WITHIN one electrode (slow AM vs fast AM, same drive vector
+both times) rather than between electrodes. The wash is identical in both
+halves of the comparison, so an HF rolloff on the leading electrode still
+shows up as a slow/fast difference. What it does mean is that a rolloff on
+one of the three background electrodes leaks into every other electrode's
+test, so tilt values are not fully independent of each other.
 """
 
 from __future__ import annotations
@@ -207,9 +221,13 @@ class TiltPage(QWizardPage):
 
         freq_label = 'slow' if hz == SLOW_HZ else 'fast'
         display = {'1': 'A', '2': 'B', '3': 'C', '4': 'D'}.get(name[1], name[1])
+        # The comparison this page can actually support is slow-vs-fast on the
+        # SAME drive, not this electrode against the others — the other three
+        # are present at ~1/3 in every test (see the module docstring).
         self._status_label.setText(
-            f'Testing electrode {display} — {freq_label} ({hz:.0f} Hz AM). '
-            f'Adjust slider if this electrode sounds different from the others.'
+            f'Electrode {display} leading (others ~⅓) — {freq_label} '
+            f'({hz:.0f} Hz AM). Adjust the slider if this electrode feels '
+            f'weaker on fast than on slow.'
         )
 
         self._test_timer.start()

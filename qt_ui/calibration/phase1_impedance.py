@@ -9,6 +9,21 @@ written into the session as the baseline.
 
 Phase 4 (perception sweep) will later use the user's normal algorithm;
 this phase uses the calibration algorithm to guarantee balanced drive.
+
+★ The balanced drive is load-bearing, not just tidy. The device normalizes
+the commanded electrode vector so its maximum is 1, which distorts any
+NON-uniform command — a commanded (1,0,0,0) arrives as roughly
+(1, 0.37, 0.36, 0.50), measured on a phantom 2026-08-30. A uniform command
+is the one case the normalization leaves alone: ALL = (0.25,0.25,0.25,0.25)
+is delivered as (1,1,1,1), all four electrodes genuinely equal. That is why
+the impedance ratios here — and the gain_trims computed from them — are
+sound, while Phase 3 and the tilt page (which drive SINGLE_A..D) cannot
+isolate an electrode.
+
+So: keep this drive UNIFORM. Switching it to per-electrode or pair drives
+to "measure each electrode properly" would silently break the trims, since
+the drive would no longer be balanced at the body no matter what is
+commanded. Only `level` attenuates; the vector's magnitudes do not.
 """
 
 from __future__ import annotations

@@ -10,6 +10,20 @@ nudge any electrode that feels off.
 
 The page is fully skippable — clicking Next without adjusting any slider
 just keeps the auto-computed trims.
+
+⚠ "one electrode at a time" is the INTENT, not what the hardware does.
+The device may not drive one lane above the sum of the other three, so a
+commanded (1,0,0,0) is delivered as roughly (1, 0.37, 0.36, 0.50) —
+measured on a phantom 2026-08-30. The tested electrode leads; the other
+three sit at about a third. Isolation is not reachable on this device at
+any command, so these are still the right drive vectors.
+
+What that costs the page: the four judgements are COUPLED. A weak E4
+contributes to every test, including E1's, so "E1 feels weak" is partly a
+statement about the other three, and moving one slider changes how the
+others read. The comparative judgement (E1 vs E2, same shape permuted)
+survives this; an absolute per-electrode reading does not. Prefer
+answering "which of these two feels stronger" over "is this one right".
 """
 
 from __future__ import annotations
@@ -263,8 +277,11 @@ class BalancePage(QWizardPage):
         adapter.set_calibration_waveform(pair, TEST_DRIVE_LEVEL, TEST_DURATION_MS)
         electrode_letter = name[1]  # 'E1' → '1'... use display letter
         display = {'1': 'A', '2': 'B', '3': 'C', '4': 'D'}.get(electrode_letter, electrode_letter)
+        # "alone" would be a lie: the other three keep about a third of the
+        # drive (see the module docstring). Say what is actually happening, so
+        # the judgement being asked for is the one the signal can support.
         self._status_label.setText(
-            f'Driving electrode {display} alone — adjust slider if it feels '
+            f'Electrode {display} leading (others ~⅓) — adjust slider if it feels '
             f'noticeably different from the others.'
         )
         self._test_timer.start(TEST_DURATION_MS)

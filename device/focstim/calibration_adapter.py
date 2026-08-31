@@ -33,17 +33,41 @@ from stim_math.calibration.device_protocol import (
 
 logger = logging.getLogger('restim.calibration.adapter')
 
-# Drive vectors per ElectrodePair as (a, b, c, d) tuples. Magnitudes here
-# distribute current across the named electrodes when multiplied through
-# AXIS_ELECTRODE_N_POWER. The wizard supplies the level (volume) separately.
+# Drive vectors per ElectrodePair as (a, b, c, d) tuples.
+#
+# ⚠ These magnitudes SHAPE the drive; they do not ATTENUATE it. The device
+# normalizes the commanded vector so its maximum is 1 before delivering it, so
+# only the RATIOS between the four entries survive — `level` (volume) is the
+# one thing that sets how much current flows. Measured on a phantom
+# 2026-08-30: (0.25,0.25,0.25,0.25) and (1,1,1,1) deliver identically, within
+# 0.6%. Halving a row here to be gentler achieves exactly nothing; lower
+# `level` instead.
+#
+# The delivered vector is `constrain_4p_amplitudes` (stim_math/transforms_4.py):
+# clip, redistribute any lane exceeding the sum of the other three, then lift so
+# the maximum is 1. Delivered values below are measured, not derived.
 _PAIR_TO_DRIVES = {
+    # ⚠ UNUSED (no caller as of 2026-08-30), and misleadingly named: the
+    # four-phase constraint means a "pair" drive still drives all four.
+    # AB delivers roughly (1, 1, 0.48, 0.62) — C and D at about half.
     ElectrodePair.AB:       (0.5,  0.5,  0.0,  0.0),
     ElectrodePair.CD:       (0.0,  0.0,  0.5,  0.5),
     ElectrodePair.AC:       (0.5,  0.0,  0.5,  0.0),
     ElectrodePair.BD:       (0.0,  0.5,  0.0,  0.5),
+
+    # Phase 1 / 4. Uniform, and therefore the one case the normalization leaves
+    # alone: delivered (1,1,1,1), all four electrodes driven equally. This is
+    # why the Phase 1 impedance ratios — and the gain_trims computed from them —
+    # are sound despite everything above.
     ElectrodePair.ALL:      (0.25, 0.25, 0.25, 0.25),
-    # Phase 3 per-electrode isolation: drive one electrode at full vector,
-    # others at zero. The volume passed alongside still scales it.
+
+    # Phase 3 / tilt. ⚠ NOT isolation, and isolation is NOT ACHIEVABLE on this
+    # hardware: a lane may not exceed the sum of the other three, so the
+    # redistribution stage fires here and the other electrodes keep about a
+    # third of the drive. Measured for SINGLE_A: delivered
+    # (1, 0.37, 0.36, 0.50). These vectors are still the RIGHT ones — (1,0,0,0)
+    # is the most focused command the device accepts — but a page built on them
+    # is asking for a comparative judgement against a wash, never a solo.
     ElectrodePair.SINGLE_A: (1.0,  0.0,  0.0,  0.0),
     ElectrodePair.SINGLE_B: (0.0,  1.0,  0.0,  0.0),
     ElectrodePair.SINGLE_C: (0.0,  0.0,  1.0,  0.0),
@@ -140,6 +164,10 @@ class FOCStimCalibrationAdapter(QObject):
         duration_ms: int,
     ) -> None:
         """Drive a known waveform on the named pair at the given level.
+
+        ``level`` is the only attenuator. The pair's vector sets the SHAPE of
+        the drive; the device normalizes it to maximum 1 before delivering, so
+        its absolute magnitudes do not reach the body — see _PAIR_TO_DRIVES.
 
         duration_ms is informational only — the caller manages timing and
         will either call this method again with new values or call
