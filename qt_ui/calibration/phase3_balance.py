@@ -44,7 +44,9 @@ import logging
 
 from PySide6.QtCore import QTimer, Qt, Signal
 from PySide6.QtWidgets import (
+    QButtonGroup,
     QGridLayout,
+    QHBoxLayout,
     QLabel,
     QPushButton,
     QSlider,
@@ -60,6 +62,17 @@ logger = logging.getLogger('restim.calibration.phase3')
 
 TEST_DRIVE_LEVEL = 0.18
 TEST_DURATION_MS = 3000
+
+# The held-compare toggle re-issues set_calibration_waveform on every flip, so
+# this only needs to outlast the longest plausible pause between flips —
+# duration_ms is informational-only at the adapter (see device_protocol.py),
+# the widget is what silences on Stop / cleanupPage.
+COMPARE_DRIVE_DURATION_MS = 10 * 60_000
+
+# Adjacent pairs only, matching the existing "compare against the previously
+# tested electrode" chain order — the two electrodes NOT in the pair stay at
+# their washed ~1/3 level in both toggle states, so only the leader swaps.
+COMPARE_PAIRS = (('E1', 'E2'), ('E2', 'E3'), ('E3', 'E4'))
 
 # Slider scale: 100 = 1.0× (no change). Asymmetric range — reduction is
 # more permissive than boost since attenuating a hot electrode is safer
@@ -94,7 +107,9 @@ class BalancePage(QWizardPage):
             'slider if one is noticeably stronger or weaker. Skip if '
             'everything feels balanced. Gain is capped at 1.0× — only '
             'attenuation is applied, preventing current overload on '
-            'sensitive electrodes.'
+            'sensitive electrodes. For a more sensitive comparison, use '
+            '"Compare" below to hold two neighbouring electrodes live and '
+            'flip which one leads instantly, instead of judging from memory.'
         )
 
         self._baseline_trims: dict[str, float] = {}
@@ -102,6 +117,11 @@ class BalancePage(QWizardPage):
         self._sliders: dict[str, QSlider] = {}
         self._test_buttons: dict[str, QPushButton] = {}
         self._current_labels: dict[str, QLabel] = {}
+
+        self._name_to_single = {name: pair for name, _display, pair in _ELECTRODES}
+        self._display_letter = {name: display for name, display, _pair in _ELECTRODES}
+        self._compare_pair: tuple[str, str] | None = None
+        self._compare_leading: str | None = None
 
         layout = QVBoxLayout(self)
 
@@ -130,6 +150,7 @@ class BalancePage(QWizardPage):
             slider.setValue(SLIDER_DEFAULT)
             slider.setTickPosition(QSlider.TickPosition.TicksBelow)
             slider.setTickInterval(25)  # show a tick at each quarter
+            slider.valueChanged.connect(lambda _, n=name: self._on_slider_changed(n))
             grid.addWidget(slider, row, 3)
             self._sliders[name] = slider
 
@@ -145,6 +166,38 @@ class BalancePage(QWizardPage):
             current_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
             grid.addWidget(current_label, row, 5)
             self._current_labels[name] = current_label
+
+        # Held A/B compare: pick an adjacent pair, then flip which one leads
+        # with no gap in the drive, instead of two sequential timed tests
+        # judged from memory. Recovers the contrast the wash costs, since the
+        # two uninvolved electrodes are identical between the two states.
+        layout.addWidget(QLabel('Compare (held toggle):'))
+
+        pair_row = QHBoxLayout()
+        self._compare_buttons: dict[tuple[str, str], QPushButton] = {}
+        for pair in COMPARE_PAIRS:
+            display = f'{self._display_letter[pair[0]]} ↔ {self._display_letter[pair[1]]}'
+            btn = QPushButton(display)
+            btn.clicked.connect(lambda _, p=pair: self._start_compare(p))
+            pair_row.addWidget(btn)
+            self._compare_buttons[pair] = btn
+        layout.addLayout(pair_row)
+
+        toggle_row = QHBoxLayout()
+        self._lead_buttons = (QPushButton(), QPushButton())
+        self._lead_group = QButtonGroup(self)
+        self._lead_group.setExclusive(True)
+        for i, btn in enumerate(self._lead_buttons):
+            btn.setCheckable(True)
+            btn.setVisible(False)
+            btn.clicked.connect(lambda _, idx=i: self._set_leading(idx))
+            self._lead_group.addButton(btn)
+            toggle_row.addWidget(btn)
+        self._compare_stop_button = QPushButton('Stop comparison')
+        self._compare_stop_button.setVisible(False)
+        self._compare_stop_button.clicked.connect(self._stop_compare)
+        toggle_row.addWidget(self._compare_stop_button)
+        layout.addLayout(toggle_row)
 
         # Opt-in: set the sliders from measured current (the user can still
         # nudge afterward). Hidden when Phase 1 captured no current telemetry.
@@ -232,7 +285,7 @@ class BalancePage(QWizardPage):
     def cleanupPage(self) -> None:
         self._test_timer.stop()
         adapter = self.wizard().adapter
-        if self._test_running_for is not None:
+        if self._test_running_for is not None or self._compare_pair is not None:
             try:
                 adapter.set_calibration_waveform(
                     ElectrodePair.ALL, 0.0, 100,
@@ -240,6 +293,8 @@ class BalancePage(QWizardPage):
             except Exception:
                 logger.exception('silence during cleanup raised')
             self._test_running_for = None
+            self._compare_pair = None
+            self._compare_leading = None
         # Leaving Phase 3 — reset calibration trims so subsequent measurement
         # phases (or a return visit) don't see stale trim state.
         try:
@@ -269,7 +324,7 @@ class BalancePage(QWizardPage):
     # --- Per-electrode test ---
 
     def _start_test(self, name: str, pair: ElectrodePair) -> None:
-        if self._test_running_for is not None:
+        if self._test_running_for is not None or self._compare_pair is not None:
             return  # another test is in progress
         adapter = self.wizard().adapter
         if not adapter.is_connected():
@@ -316,4 +371,97 @@ class BalancePage(QWizardPage):
         for btn in self._test_buttons.values():
             btn.setEnabled(True)
         self._status_label.setText('Test complete. Test another or click Next.')
+
+    # --- Held A/B compare ---
+
+    def _on_slider_changed(self, name: str) -> None:
+        # Live-adjust the leader mid-compare, same as the sequential test
+        # already does — the difference is there's no gap to re-apply into.
+        if self._compare_pair is not None and name in self._compare_pair:
+            self._drive_compare()
+
+    def _start_compare(self, pair: tuple[str, str]) -> None:
+        if self._test_running_for is not None or self._compare_pair is not None:
+            return
+        adapter = self.wizard().adapter
+        if not adapter.is_connected():
+            self._status_label.setText('Device not connected.')
+            return
+
+        self._compare_pair = pair
+        self._compare_leading = pair[0]
+
+        for btn in self._test_buttons.values():
+            btn.setEnabled(False)
+        for btn in self._compare_buttons.values():
+            btn.setEnabled(False)
+
+        lead_a, lead_b = self._lead_buttons
+        lead_a.setText(f'{self._display_letter[pair[0]]} leading')
+        lead_b.setText(f'{self._display_letter[pair[1]]} leading')
+        lead_a.setVisible(True)
+        lead_b.setVisible(True)
+        lead_a.setChecked(True)
+        self._compare_stop_button.setVisible(True)
+
+        self._drive_compare()
+        self._status_label.setText(
+            f'Comparing {self._display_letter[pair[0]]} against '
+            f'{self._display_letter[pair[1]]} — click the other button to '
+            f'flip instantly and judge which one feels stronger. The '
+            f'un-involved electrodes stay put in both states.'
+        )
+
+    def _drive_compare(self) -> None:
+        """(Re-)apply trims and drive the current leader. Called on start,
+        on every toggle flip, and on any slider nudge while held — each call
+        re-issues the waveform so a flip never opens a silent gap."""
+        if self._compare_pair is None or self._compare_leading is None:
+            return
+        adapter = self.wizard().adapter
+        baseline = self._baseline_trims
+        try:
+            adapter.set_calibration_trims(
+                min(1.0, baseline.get('E1', 1.0) * self._sliders['E1'].value() / 100.0),
+                min(1.0, baseline.get('E2', 1.0) * self._sliders['E2'].value() / 100.0),
+                min(1.0, baseline.get('E3', 1.0) * self._sliders['E3'].value() / 100.0),
+                min(1.0, baseline.get('E4', 1.0) * self._sliders['E4'].value() / 100.0),
+            )
+        except Exception:
+            logger.exception('set_calibration_trims during compare raised')
+        try:
+            adapter.set_calibration_waveform(
+                self._name_to_single[self._compare_leading],
+                TEST_DRIVE_LEVEL,
+                COMPARE_DRIVE_DURATION_MS,
+            )
+        except Exception:
+            logger.exception('set_calibration_waveform during compare raised')
+
+    def _set_leading(self, index: int) -> None:
+        if self._compare_pair is None:
+            return
+        new_leading = self._compare_pair[index]
+        if new_leading == self._compare_leading:
+            return
+        self._compare_leading = new_leading
+        self._drive_compare()
+
+    def _stop_compare(self) -> None:
+        adapter = self.wizard().adapter
+        try:
+            adapter.set_calibration_waveform(ElectrodePair.ALL, 0.0, 100)
+        except Exception:
+            logger.exception('silence at compare stop raised')
+        self._compare_pair = None
+        self._compare_leading = None
+        for btn in self._lead_buttons:
+            btn.setVisible(False)
+            btn.setChecked(False)
+        self._compare_stop_button.setVisible(False)
+        for btn in self._test_buttons.values():
+            btn.setEnabled(True)
+        for btn in self._compare_buttons.values():
+            btn.setEnabled(True)
+        self._status_label.setText('Comparison stopped.')
 
