@@ -51,12 +51,12 @@ from device.focstim.calibration_adapter import FOCStimCalibrationAdapter
 from device.focstim.calibration_algorithm import CalibrationFourphaseAlgorithm
 from qt_ui.calibration.wizard import CalibrationWizard
 from stim_math.audio_gen.switching_algorithm import SwitchingAlgorithm
+from stim_math.calibration.db import MIN_TRIM_GAIN, gain_to_db
 from stim_math.calibration.io import load as load_calibration_profile
 from stim_math.calibration.profile import CalibrationProfile
 from stim_math.calibration.session import CalibrationSession
 from version import VERSION as RESTIM_VERSION
 from PySide6.QtGui import QAction
-import math as _math
 
 logger = logging.getLogger('restim.main')
 
@@ -837,18 +837,23 @@ class Window(QMainWindow, Ui_MainWindow):
             # attenuation-only by construction (wizard normalizes), but
             # clamp defensively: never boost, never -inf
             gain = min(max(electrode.gain_trim, 1e-3), 1.0)
-            db = 20.0 * _math.log10(gain)
             # Safety floor: trims are for BALANCING, and the felt dynamic
-            # range is only ~6-10 dB — a trim past -9 dB doesn't balance an
-            # electrode, it deletes it (threshold), and almost certainly
-            # encodes a corrupted measurement or a runaway wizard slider
-            # (2026-07-08: a saved 0.065 trim made E4 vanish entirely).
-            if db < -9.0:
+            # range is only ~6-10 dB — a trim past -9 dB DELIVERED doesn't
+            # balance an electrode, it deletes it (threshold), and almost
+            # certainly encodes a corrupted measurement or a runaway wizard
+            # slider (2026-07-08: a saved 0.065 trim made E4 vanish entirely).
+            # ★Clamped on the GAIN, not on the dB: the wire value is no longer
+            # 20*log10(gain) (the device delivers ~2.23 dB per dB commanded —
+            # see stim_math/calibration/db.py), so a literal -9.0 dB clamp
+            # would silently become twice as strict as the sentence above.
+            if gain < MIN_TRIM_GAIN:
                 logger.warning(
-                    f'calibration: {name} trim {db:+.1f}dB is beyond the '
-                    f'-9dB balance floor — clamped. Re-run the wizard; if '
-                    f'it persists, the imbalance is physical.')
-                db = -9.0
+                    f'calibration: {name} trim gain {gain:.3f} is beyond the '
+                    f'-9dB delivered balance floor — clamped to '
+                    f'{MIN_TRIM_GAIN:.3f}. Re-run the wizard; if it persists, '
+                    f'the imbalance is physical.')
+                gain = MIN_TRIM_GAIN
+            db = gain_to_db(gain)
             self.calibration_trims_db[name] = db
             if abs(db) > 0.01:
                 staged.append(f'{name}={db:+.2f}dB (gain={gain:.3f})')

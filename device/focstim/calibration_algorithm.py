@@ -105,9 +105,15 @@ class CalibrationFourphaseAlgorithm(RemoteGenerationAlgorithm):
     @staticmethod
     def _trim_db(trim: float) -> float:
         """Linear trim multiplier → dB for the CALIBRATION_4_* wire unit.
-        Clamped to [1e-3, 1] (attenuation-only, no -inf)."""
-        import math
-        return 20.0 * math.log10(min(max(float(trim), 1e-3), 1.0))
+
+        Clamped to [1e-3, 1] (attenuation-only, no -inf). ⚠The conversion is
+        NOT 20*log10: the device delivers ~2.23 dB per dB commanded, so that
+        attenuates twice as hard as intended. See stim_math/calibration/db.py
+        for the measurement. Before 2026-09-02 this over-responded by ~2x,
+        which is felt here as a Phase-3 slider that moves too fast.
+        """
+        from stim_math.calibration.db import gain_to_db
+        return gain_to_db(trim)
 
     def parameter_dict(self) -> dict:
         # NOTE: no media.is_playing() gate here — the calibration wizard
