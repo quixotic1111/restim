@@ -837,6 +837,40 @@
         </widget>
        </item>
        <item>
+        <widget class="QGroupBox" name="groupBox_mpv">
+         <property name="title">
+          <string>mpv</string>
+         </property>
+         <layout class="QGridLayout" name="gridLayout_mpv">
+          <item row="0" column="1">
+           <widget class="QLineEdit" name="mpv_socket">
+            <property name="toolTip">
+             <string>Start mpv with --input-ipc-server=&lt;this path&gt;</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="0">
+           <widget class="QLabel" name="label_mpv_socket">
+            <property name="text">
+             <string>IPC socket</string>
+            </property>
+           </widget>
+          </item>
+          <item row="0" column="2">
+           <widget class="QToolButton" name="mpv_reload">
+            <property name="text">
+             <string>...</string>
+            </property>
+            <property name="icon">
+             <iconset resource="../resources/restim.qrc">
+              <normaloff>:/restim/arrow-round_poly.svg</normaloff>:/restim/arrow-round_poly.svg</iconset>
+            </property>
+           </widget>
+          </item>
+         </layout>
+        </widget>
+       </item>
+       <item>
         <spacer name="verticalSpacer_6">
          <property name="orientation">
           <enum>Qt::Orientation::Vertical</enum>

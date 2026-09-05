@@ -81,6 +81,9 @@ class PreferencesDialog(QDialog, Ui_PreferencesDialog):
         self.kodi_reload.clicked.connect(
             functools.partial(self.kodi_address.setText, qt_ui.settings.media_sync_kodi_address.default_value)
         )
+        self.mpv_reload.clicked.connect(
+            functools.partial(self.mpv_socket.setText, qt_ui.settings.media_sync_mpv_socket.default_value)
+        )
 
         # focstim/neostim reload serial devices
         self.focstim_refresh_serial_devices.clicked.connect(self.repopulate_serial_devices)
@@ -182,6 +185,7 @@ class PreferencesDialog(QDialog, Ui_PreferencesDialog):
         self.vlc_username.setText(qt_ui.settings.media_sync_vlc_username.get())
         self.vlc_password.setText(qt_ui.settings.media_sync_vlc_password.get())
         self.kodi_address.setText(qt_ui.settings.media_sync_kodi_address.get())
+        self.mpv_socket.setText(qt_ui.settings.media_sync_mpv_socket.get())
 
         # display settings
         self.display_fps.setValue(int(qt_ui.settings.display_fps.get()))
@@ -349,6 +353,7 @@ class PreferencesDialog(QDialog, Ui_PreferencesDialog):
         qt_ui.settings.media_sync_vlc_username.set(self.vlc_username.text())
         qt_ui.settings.media_sync_vlc_password.set(self.vlc_password.text())
         qt_ui.settings.media_sync_kodi_address.set(self.kodi_address.text())
+        qt_ui.settings.media_sync_mpv_socket.set(self.mpv_socket.text())
 
         # display
         qt_ui.settings.display_fps.set(self.display_fps.value())
