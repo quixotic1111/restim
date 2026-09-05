@@ -845,7 +845,9 @@
           <item row="0" column="1">
            <widget class="QLineEdit" name="mpv_socket">
             <property name="toolTip">
-             <string>Start mpv with --input-ipc-server=&lt;this path&gt;</string>
+             <string>Start mpv with --input-ipc-server=&lt;this path&gt; --keep-open=yes.
+
+Without --keep-open mpv exits at the end of the file, this source disconnects, the media clock stops and the axes hold their last value — which is a stuck output, not silence.</string>
             </property>
            </widget>
           </item>

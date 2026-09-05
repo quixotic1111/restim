@@ -906,7 +906,9 @@ class Ui_PreferencesDialog(object):
         self.kodi_reload.setText(QCoreApplication.translate("PreferencesDialog", u"...", None))
         self.groupBox_mpv.setTitle(QCoreApplication.translate("PreferencesDialog", u"mpv", None))
 #if QT_CONFIG(tooltip)
-        self.mpv_socket.setToolTip(QCoreApplication.translate("PreferencesDialog", u"Start mpv with --input-ipc-server=<this path>", None))
+        self.mpv_socket.setToolTip(QCoreApplication.translate("PreferencesDialog", u"Start mpv with --input-ipc-server=<this path> --keep-open=yes.\n"
+"\n"
+"Without --keep-open mpv exits at the end of the file, this source disconnects, the media clock stops and the axes hold their last value \u2014 which is a stuck output, not silence.", None))
 #endif // QT_CONFIG(tooltip)
         self.label_mpv_socket.setText(QCoreApplication.translate("PreferencesDialog", u"IPC socket", None))
         self.mpv_reload.setText(QCoreApplication.translate("PreferencesDialog", u"...", None))
