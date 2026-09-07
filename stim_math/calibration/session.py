@@ -192,6 +192,75 @@ class CalibrationSession:
             }
         return profile
 
+    def finalize_impedance_only(
+        self, base: CalibrationProfile) -> CalibrationProfile:
+        """Refresh impedances on an EXISTING profile, keeping everything felt.
+
+        The question this answers is "has the contact drifted?", which is a
+        MEASUREMENT, not a recalibration. Today that needs the whole wizard:
+        finalize() rebuilds the profile from scratch, so re-measuring contact
+        also rebuilds the perception curve, the safe envelope and the tilt
+        from whatever landmarks the session happens to hold — and overwrites
+        hand-tuned gain trims. That is why re-running the wizard is its own
+        session with a backup first, and why a one-minute check does not
+        exist.
+
+        ⚠So this MERGES rather than builds. Only the measured quantities move:
+        per-electrode Z, and the measured-current provenance when captured.
+        The perception curve, safe envelope, tilt, notes and label come from
+        `base` untouched.
+
+        ★Gain trims are DELIBERATELY preserved from `base`, not recomputed
+        from the new impedances. A trim carries human judgement — the E4 0.65
+        on this rig was arrived at by feel — and silently replacing it with a
+        fresh |Z| ratio would be exactly the destructive rebuild this method
+        exists to avoid. An electrode NEW to the profile gets 1.0, which is
+        the neutral default, not a guess.
+
+        Phase 4 is not required, which is the point; Phase 1 still is, because
+        without impedances there is nothing to refresh.
+        """
+        if not self.impedances:
+            raise ValueError(
+                'cannot refresh: no impedance readings recorded (Phase 1 missing)'
+            )
+
+        profile = CalibrationProfile.from_dict(base.to_dict())
+        profile.electrodes = {
+            name: Electrode(
+                Z_real_ohms=z.real,
+                Z_imag_ohms=z.imag,
+                # keep the trim this electrode already had
+                gain_trim=(base.electrodes[name].gain_trim
+                           if name in base.electrodes else 1.0),
+            )
+            for name, z in self.impedances.items()
+        }
+        if self.measured_currents:
+            profile.measured_currents_ma = {
+                name: round(amps * 1000.0, 3)
+                for name, amps in self.measured_currents.items()
+            }
+        return profile
+
+    def impedance_drift(
+        self, base: CalibrationProfile) -> dict[str, float]:
+        """{electrode: |Z| ratio vs `base`} — >1 means the contact got worse.
+
+        Reported on |Z| rather than R because the whole codebase already
+        treats |Z| as the trustworthy quantity: firmware noise can produce a
+        physically meaningless negative real part that is still valid as part
+        of a positive magnitude (see validation._check_electrodes, and the
+        live profile's E3).
+        """
+        out: dict[str, float] = {}
+        for name, z in self.impedances.items():
+            prev = base.electrodes.get(name)
+            if prev is None or prev.Z_magnitude <= 0:
+                continue
+            out[name] = abs(z) / prev.Z_magnitude
+        return out
+
     # === Partial save / restore (power-cycle recovery) ===
 
     def save_partial(self, path: Path | None = None) -> None:
