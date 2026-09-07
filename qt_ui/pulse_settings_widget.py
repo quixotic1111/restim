@@ -288,8 +288,14 @@ class PulseSettingsWidget(QtWidgets.QWidget):
             self.details_info.setStyleSheet('')
             self.details_info.setText(f'{duty_cycle:.0%}')
         else:
+            # Show the REAL value, not a clamped 100%. Red already carries the
+            # "over the limit" warning; clamping additionally hid HOW FAR over,
+            # so 140% and 400% read identically. That number is the useful one:
+            # the firmware never actually reaches duty 1 (it stretches the
+            # period instead), so the question is always how far past, not
+            # whether.
             self.details_info.setStyleSheet('color: red')
-            self.details_info.setText(f'{1:.0%}')
+            self.details_info.setText(f'{duty_cycle:.0%}')
 
         # Effective rise readout. The envelope generator caps each ramp at
         # half the pulse width (create_pulse_with_ramp_time falls back to a
