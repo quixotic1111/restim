@@ -30,6 +30,12 @@ class ValidationResult:
         self.warnings.append(msg)
 
 
+#: The electrode set a complete FOC-stim profile covers. Named here rather
+#: than inferred from whatever the file happens to contain, because the whole
+#: point is to notice what is ABSENT.
+EXPECTED_ELECTRODES = frozenset({"E1", "E2", "E3", "E4"})
+
+
 def validate(profile: CalibrationProfile) -> ValidationResult:
     result = ValidationResult()
 
@@ -71,6 +77,34 @@ def _check_electrodes(profile: CalibrationProfile, result: ValidationResult) -> 
             )
         if e.gain_trim <= 0:
             result.error(f"electrode {name}: gain_trim must be > 0 (got {e.gain_trim})")
+        # ★Attenuation-only is a real convention, enforced in three places —
+        # session.finalize() normalizes, phase3_balance caps its writes, and
+        # mainwindow clamps defensively at the consumer — but nothing ever
+        # SAID so when a profile violated it. A hand-edited or future-schema
+        # profile carrying 1.17 validated clean. The live clamp still saves
+        # the device, so this reports rather than protects: it names the file
+        # as wrong instead of letting a silent clamp hide it.
+        if e.gain_trim > 1.0:
+            result.warn(
+                f"electrode {name}: gain_trim {e.gain_trim:.3f} > 1.0 — trims "
+                f"are attenuation-only (the wizard normalizes so the loudest "
+                f"is exactly 1.0). It will be clamped to 1.0 when applied, so "
+                f"this electrode's intended balance is NOT what the file says."
+            )
+
+    # ⚠A profile measured on a SUBSET validates clean without this: electrodes
+    # is a plain dict with no expected set, so a wizard run that skipped two
+    # electrodes produces a file that looks complete and silently leaves those
+    # two at their default trim. Warned, not errored — a deliberately partial
+    # profile is a legitimate thing to save (`save_partial`), and refusing to
+    # load one would be worse than saying it is partial.
+    missing = sorted(EXPECTED_ELECTRODES - set(profile.electrodes))
+    if missing:
+        result.warn(
+            f"profile covers {len(profile.electrodes)} of "
+            f"{len(EXPECTED_ELECTRODES)} electrodes — {', '.join(missing)} "
+            f"absent, so they keep the default trim and were never measured."
+        )
 
 
 def _check_perception_curve(profile: CalibrationProfile, result: ValidationResult) -> None:
