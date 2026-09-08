@@ -19,6 +19,7 @@ from PySide6.QtCore import QTimer, Qt
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
+    QRadioButton,
     QProgressBar,
     QPushButton,
     QVBoxLayout,
@@ -95,10 +96,40 @@ class WelcomePage(QWizardPage):
 
         layout.addStretch()
 
+        # --- Route: full calibration vs a contact check ---
+        # "Has contact drifted?" is a MEASUREMENT, not a recalibration, but
+        # until now the only way to answer it was the whole wizard — and
+        # finalize() rebuilds the profile from scratch, overwriting hand-tuned
+        # gain trims. The impedance-only route measures Phase 1 and MERGES,
+        # so the felt values survive.
+        self._route_full = QRadioButton(
+            'Full calibration — all 7 steps, rebuilds the profile')
+        self._route_full.setChecked(True)
+        layout.addWidget(self._route_full)
+
+        self._route_check = QRadioButton(
+            'Contact check only — measure impedance, keep everything felt')
+        self._route_check.setToolTip(
+            'Measures impedance and shows how far each electrode has drifted '
+            'from your saved profile. Gain trims, the perception curve and '
+            'the safe envelope are kept exactly as they are.')
+        layout.addWidget(self._route_check)
+
+        # ⚠Refused HERE rather than at save time: the merge needs a base, and
+        # letting someone measure first would spend a pass they can feel on a
+        # route that cannot finish.
+        self._route_note = QLabel('')
+        self._route_note.setWordWrap(True)
+        self._route_note.setStyleSheet('color: #888;')
+        layout.addWidget(self._route_note)
+
         # --- Footer: what the wizard will do + safety note ---
+        # ⚠Names BOTH routes: a footer that only described the 7-step run
+        # would contradict the contact-check option immediately above it.
         footer = QLabel(
-            '<i>The wizard runs 7 short steps (about 5 minutes). Steps 1, 3, '
-            '4, and 6 deliver a gentle signal. Cancel always silences the '
+            '<i>Full calibration runs 7 short steps (about 5 minutes); steps '
+            '1, 3, 4, and 6 deliver a gentle signal. The contact check runs '
+            'step 1 only, then shows the drift. Cancel always silences the '
             'device. If contact is lost mid-wizard, power-cycle the FOC-stim '
             'and restart.</i>'
         )
@@ -112,6 +143,36 @@ class WelcomePage(QWizardPage):
         self._tick_timer.timeout.connect(self._tick)
 
     # --- QWizardPage lifecycle ---
+
+    def initializePage(self) -> None:
+        """Offer the contact check only when there is a profile to merge into."""
+        try:
+            from stim_math.calibration.io import load
+            base, result = load()
+        except Exception:
+            base, result = None, None
+        ok = base is not None and getattr(result, 'ok', False)
+        self._route_check.setEnabled(bool(ok))
+        if ok:
+            self._route_note.setText(
+                f'<i>Contact check merges into your saved profile '
+                f'&ldquo;{base.user_label}&rdquo;.</i>')
+        elif base is not None:
+            self._route_note.setText(
+                '<i>Contact check unavailable — the saved profile did not '
+                'validate, so there is nothing safe to merge into. Run a '
+                'full calibration.</i>')
+        else:
+            self._route_note.setText(
+                '<i>Contact check unavailable — no saved profile yet. Run a '
+                'full calibration first; the check compares against it.</i>')
+        self._route_note.setTextFormat(Qt.TextFormat.RichText)
+        if not ok:
+            self._route_full.setChecked(True)
+
+    def impedance_only(self) -> bool:
+        """True when the user picked the contact check."""
+        return self._route_check.isEnabled() and self._route_check.isChecked()
 
     def cleanupPage(self) -> None:
         self._stop_test()

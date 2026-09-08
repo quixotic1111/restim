@@ -27,6 +27,7 @@ from qt_ui.calibration.phase4_perception import PerceptionPage
 from qt_ui.calibration.phase5_envelope import EnvelopePage
 from qt_ui.calibration.phase6_preview import PreviewPage
 from qt_ui.calibration.phase7_save import SavePage
+from qt_ui.calibration.phase_drift import DriftPage
 from qt_ui.calibration.phase_tilt import TiltPage
 from qt_ui.calibration.welcome import WelcomePage
 from stim_math.calibration.device_protocol import CalibrationDeviceProtocol
@@ -46,6 +47,7 @@ class WizardPageId(IntEnum):
     TILT = 9          # frequency-response calibration (skippable)
     PREVIEW = 7
     SAVE = 8
+    DRIFT = 10        # contact-check result (impedance-only route)
 
 
 class CalibrationWizard(QWizard):
@@ -92,6 +94,7 @@ class CalibrationWizard(QWizard):
         self.setPage(WizardPageId.TILT, TiltPage())
         self.setPage(WizardPageId.PREVIEW, PreviewPage())
         self.setPage(WizardPageId.SAVE, SavePage())
+        self.setPage(WizardPageId.DRIFT, DriftPage())
         self.setStartId(WizardPageId.WELCOME)
 
     def nextId(self) -> int:
@@ -101,6 +104,10 @@ class CalibrationWizard(QWizard):
         if cur == WizardPageId.PREFLIGHT:
             return WizardPageId.IMPEDANCE
         if cur == WizardPageId.IMPEDANCE:
+            # The contact-check route stops here: impedance is the only thing
+            # it measures, and everything else in the profile is kept as-is.
+            if self._impedance_only():
+                return WizardPageId.DRIFT
             return WizardPageId.LAYOUT
         if cur == WizardPageId.LAYOUT:
             return WizardPageId.BALANCE
@@ -114,7 +121,19 @@ class CalibrationWizard(QWizard):
             return WizardPageId.PREVIEW
         if cur == WizardPageId.PREVIEW:
             return WizardPageId.SAVE
-        return -1  # SAVE is the final page
+        return -1  # SAVE and DRIFT are both terminal
+
+    def _impedance_only(self) -> bool:
+        """Did the Welcome page choose the contact check?
+
+        Read from the page rather than mirrored into a wizard field, so there
+        is one source of truth and going Back to change the answer works.
+        """
+        page = self.page(WizardPageId.WELCOME)
+        try:
+            return bool(page.impedance_only())
+        except AttributeError:
+            return False
 
     def done(self, result: int) -> None:
         """Single exit point — handles Finish, Cancel, Esc, and window-close.
