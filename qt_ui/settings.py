@@ -125,6 +125,11 @@ threephase_map_to_edge_invert = Setting('threephase_transform/map_to_edge_invert
 # numbers came from instead of assuming (e.g. "profile 3f9a1c2b0d 2026-09-08
 # 21:40"). Empty = the values were typed, or came from another build.
 fourphase_calibration_ft_stamp = Setting('calibration_four/ft_stamp', '', str)
+# The V1 ceiling Funscript Tools leaves after a calibration (its profile's
+# max_comfortable_output): the external volume STARTS here instead of at
+# 100 %, so a manual Play cannot exceed the user's calibrated top even right
+# after a restart. 0 = none (start at 100 %, as upstream does).
+fourphase_calibration_external_cap = Setting('calibration_four/external_volume_cap', 0.0, float)
 
 fourphase_calibration_a = Setting('calibration_four/a', 0.0, float)
 fourphase_calibration_b = Setting('calibration_four/b', 0.0, float)

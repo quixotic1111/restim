@@ -821,6 +821,18 @@ class Window(QMainWindow, Ui_MainWindow):
         else:
             logger.info(f'calibration_four {vals} (no FT hand-off stamp; '
                         'typed by hand or from another build)')
+        try:
+            cap = qt_ui.settings.fourphase_calibration_external_cap.get()
+        except Exception:
+            cap = 0.0
+        if 0.0 < cap <= 1.0:
+            logger.info(f'external volume (V1) starts at {cap:.2f} — the '
+                        'Funscript Tools calibration cap; Play is bounded '
+                        'at the calibrated top until "Reset external volume" '
+                        'lifts it')
+        else:
+            logger.info('external volume (V1) starts at 1.00 (no Funscript '
+                        'Tools cap in restim.ini)')
 
     def autostart_timeout(self):
         print('autostart timeout')
@@ -938,6 +950,13 @@ class Window(QMainWindow, Ui_MainWindow):
         }
         if self.last_device_volume is not None:
             params["volume"]["device"] = self.last_device_volume
+        # The live external volume (V1), so Funscript Tools can VERIFY the
+        # calibration cap it left rather than assume it. Fork-only field.
+        try:
+            params["volume"]["external"] = float(
+                self.tab_volume.axis_external_volume.last_value())
+        except Exception:
+            pass
         return json.dumps(params)
 
     def api_start(self, request: QHttpServerRequest):

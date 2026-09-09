@@ -26,6 +26,9 @@ class VolumeControlWidget(QtWidgets.QWidget, Ui_VolumeControlForm):
         # T-code sender (e.g. funscript processor at stop) sets V1=0, it stays
         # zeroed until something writes to it again.
         self.button_reset_external_volume = QPushButton("Reset external volume (V1) to 100%", self)
+        self.button_reset_external_volume.setToolTip(
+            "Lifts the Funscript Tools calibration cap for this session.\n"
+            "Play is then bounded only by the master and the device knob.")
         self.button_reset_external_volume.clicked.connect(self.reset_external_volume)
         self.verticalLayout.insertWidget(0, self.button_reset_external_volume)
 
@@ -37,8 +40,13 @@ class VolumeControlWidget(QtWidgets.QWidget, Ui_VolumeControlForm):
         self.axis_inactivity_volume = create_temporal_axis(1.0)
         # master volume, volume set in application. Slowly increases if ramp is used.
         self.axis_master_volume = create_temporal_axis(settings.volume_default_level.get())
-        # volume set by tcode, used by external applications
-        self.axis_external_volume = create_temporal_axis(1.0)
+        # volume set by tcode, used by external applications. Starts at the
+        # Funscript Tools calibration CAP when one is in restim.ini, so Play
+        # after a restart is bounded at the user's calibrated top; the
+        # "Reset external volume (V1) to 100%" button lifts it deliberately.
+        _cap = settings.fourphase_calibration_external_cap.get()
+        self.axis_external_volume = create_temporal_axis(
+            _cap if 0.0 < _cap <= 1.0 else 1.0)
 
         self.axis_tau = create_constant_axis(settings.tau_us.get())
         self.axis_pulse_frequency_adjustment_enable = create_constant_axis(settings.pulse_frequency_calibration_enable.get())
