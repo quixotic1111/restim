@@ -114,7 +114,17 @@ threephase_map_to_edge_invert = Setting('threephase_transform/map_to_edge_invert
 # ~/.restim/calibration.json) as dB offsets on the 4-phase output.
 # Set False ONLY if the trims are already baked upstream (Funscript
 # Tools' opt-in bake_gain) — otherwise they'd apply twice.
-calibration_apply_gain_trims = Setting('calibration/apply_gain_trims', True, bool)
+# calibration/apply_gain_trims was the fork's own trim path (profile gain_trims
+# staged as OffsetAxis offsets on top of the A/B/C/D spinboxes). Removed
+# 2026-09-08: Funscript Tools is the one writer of calibration, and it writes
+# the four dB values straight into [calibration_four] — the stock upstream
+# section — so there is exactly one path from a profile to the device. The
+# ini key may still exist in old files; it is ignored.
+#
+# ft_stamp is written by FT beside a..d so restim can SAY where the four
+# numbers came from instead of assuming (e.g. "profile 3f9a1c2b0d 2026-09-08
+# 21:40"). Empty = the values were typed, or came from another build.
+fourphase_calibration_ft_stamp = Setting('calibration_four/ft_stamp', '', str)
 
 fourphase_calibration_a = Setting('calibration_four/a', 0.0, float)
 fourphase_calibration_b = Setting('calibration_four/b', 0.0, float)

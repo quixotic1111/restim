@@ -51,9 +51,6 @@ from device.focstim.calibration_adapter import FOCStimCalibrationAdapter
 from device.focstim.calibration_algorithm import CalibrationFourphaseAlgorithm
 from qt_ui.calibration.wizard import CalibrationWizard
 from stim_math.audio_gen.switching_algorithm import SwitchingAlgorithm
-from stim_math.calibration.db import MIN_TRIM_GAIN, gain_to_db
-from stim_math.calibration.io import load as load_calibration_profile
-from stim_math.calibration.profile import CalibrationProfile
 from stim_math.calibration.session import CalibrationSession
 from version import VERSION as RESTIM_VERSION
 from PySide6.QtGui import QAction
@@ -308,6 +305,11 @@ class Window(QMainWindow, Ui_MainWindow):
         self.actionCalibration_wizard.setEnabled(True)
         self.actionCalibration_wizard.triggered.connect(self.open_calibration_wizard)
         self.menuTools.addAction(self.actionCalibration_wizard)
+        # Hidden 2026-09-08, kept one release. Calibration is measured and
+        # written by Funscript Tools now; this wizard's output
+        # (~/.restim/calibration.json) is read by nothing. The code stays so
+        # the action can be re-shown for a diagnosis; delete both next release.
+        self.actionCalibration_wizard.setVisible(False)
 
         self.iconMedia = IconWithConnectionStatus(self.actionMedia.icon(), self.toolBar.widgetForAction(self.actionMedia))
         self.actionMedia.setIcon(QIcon(self.iconMedia))
@@ -322,8 +324,7 @@ class Window(QMainWindow, Ui_MainWindow):
         # as dB offsets for the 4-phase output stage (spinboxes stay
         # user-owned; the algorithm factory overlays the offsets). Runs
         # once at startup; the wizard re-applies after each save.
-        self.calibration_trims_db = {}
-        self._load_and_apply_saved_calibration()
+        self._log_calibration_four_source()
 
         config = DeviceConfiguration.from_settings()
         if config.device_type == DeviceType.NONE:
@@ -777,7 +778,6 @@ class Window(QMainWindow, Ui_MainWindow):
         wizard = CalibrationWizard(adapter, session, parent=self)
         wizard.wizard_finished.connect(self.signal_stop)
         wizard.exec()
-        self._load_and_apply_saved_calibration()
         # Restore master volume then restart signal so the device is immediately
         # ready for T-code streaming without requiring the user to manually click
         # Start. signal_stop was called via wizard_finished before exec() returned,
@@ -785,81 +785,42 @@ class Window(QMainWindow, Ui_MainWindow):
         self.tab_volume.doubleSpinBox_volume.setValue(_pre_wizard_volume)
         self.signal_start()
 
-    def _load_and_apply_saved_calibration(self) -> None:
-        """Read ~/.restim/calibration.json (if present) and apply gain_trims.
+    def _log_calibration_four_source(self) -> None:
+        """Say where the 4-phase A/B/C/D power values came from. Log only.
 
-        Called once at startup and again after each wizard exit. Silently
-        no-ops if no profile exists or if the profile fails validation —
-        the wizard remains the only way to produce a profile, so a missing
-        one is expected on first launch.
+        History: until 2026-09-08 this fork ALSO read ~/.restim/calibration.json
+        and staged its gain_trims as dB offsets on top of the spinboxes,
+        gated by calibration/apply_gain_trims — and logged "not applied
+        (assumed baked upstream)" when the gate was off. That assumption was
+        false in both directions at once (FT does not bake either), and the
+        line made a deliberate all-zero state look like a bug.
+
+        Now there is ONE path: Funscript Tools writes the four dB values into
+        [calibration_four] (the stock upstream section) together with an
+        ft_stamp naming the profile it derived them from. restim applies
+        nothing on its own, and this line reports what the ini holds rather
+        than what somebody assumed about it.
         """
         try:
-            profile, result = load_calibration_profile()
+            a = qt_ui.settings.fourphase_calibration_a.get()
+            b = qt_ui.settings.fourphase_calibration_b.get()
+            c = qt_ui.settings.fourphase_calibration_c.get()
+            d = qt_ui.settings.fourphase_calibration_d.get()
+            stamp = (qt_ui.settings.fourphase_calibration_ft_stamp.get()
+                     or '').strip()
         except Exception:
-            logger.exception('failed to load calibration profile')
+            logger.exception('could not read [calibration_four]')
             return
-        if profile is None:
-            # Normal case before any wizard run; not an error.
-            logger.debug(f'no calibration profile to apply: {"; ".join(result.errors)}')
-            return
-        if not result.ok:
-            logger.warning(
-                f'calibration profile has issues, skipping apply: {result.errors}'
-            )
-            return
-        self._apply_calibration_profile(profile)
-
-    def _apply_calibration_profile(self, profile: CalibrationProfile) -> None:
-        """Stage the profile's gain_trims for the 4-phase output stage.
-
-        History: this used to be log-only, on the assumption that Funscript
-        Tools bakes the trims into its rendered electrode funscripts. It
-        doesn't — FT's bake_gain is opt-in and default-off ("current
-        balancing is a device concern"), so the trims were applied by
-        NOBODY and the wizard's measurements were inert (found 2026-07-08
-        chasing persistent E3/E4 heaviness).
-
-        The trims are still NOT pushed into the A/B/C/D spinboxes — those
-        stay user-owned. Instead they're staged here as dB offsets and the
-        algorithm factory overlays them (OffsetAxis) on the calibrate axes
-        at signal build. The double-apply escape hatch is the
-        calibration/apply_gain_trims setting: turn it off if you enable
-        FT's bake_gain.
-        """
-        self.calibration_trims_db = {}
-        if not qt_ui.settings.calibration_apply_gain_trims.get():
-            logger.info('calibration gain_trims present but '
-                        'calibration/apply_gain_trims=false — not applied '
-                        '(assumed baked upstream)')
-            return
-        staged: list[str] = []
-        for name, electrode in profile.electrodes.items():
-            # attenuation-only by construction (wizard normalizes), but
-            # clamp defensively: never boost, never -inf
-            gain = min(max(electrode.gain_trim, 1e-3), 1.0)
-            # Safety floor: trims are for BALANCING, and the felt dynamic
-            # range is only ~6-10 dB — a trim past -9 dB DELIVERED doesn't
-            # balance an electrode, it deletes it (threshold), and almost
-            # certainly encodes a corrupted measurement or a runaway wizard
-            # slider (2026-07-08: a saved 0.065 trim made E4 vanish entirely).
-            # ★Clamped on the GAIN, not on the dB: the wire value is no longer
-            # 20*log10(gain) (the device delivers ~2.23 dB per dB commanded —
-            # see stim_math/calibration/db.py), so a literal -9.0 dB clamp
-            # would silently become twice as strict as the sentence above.
-            if gain < MIN_TRIM_GAIN:
-                logger.warning(
-                    f'calibration: {name} trim gain {gain:.3f} is beyond the '
-                    f'-9dB delivered balance floor — clamped to '
-                    f'{MIN_TRIM_GAIN:.3f}. Re-run the wizard; if it persists, '
-                    f'the imbalance is physical.')
-                gain = MIN_TRIM_GAIN
-            db = gain_to_db(gain)
-            self.calibration_trims_db[name] = db
-            if abs(db) > 0.01:
-                staged.append(f'{name}={db:+.2f}dB (gain={gain:.3f})')
-        if staged:
-            logger.info('calibration gain_trims staged for 4-phase output: '
-                        + ", ".join(staged))
+        vals = f'a={a:+.2f} b={b:+.2f} c={c:+.2f} d={d:+.2f} dB'
+        if stamp:
+            logger.info(f'calibration_four {vals} <- Funscript Tools '
+                        f'hand-off ({stamp})')
+        elif all(abs(v) < 0.005 for v in (a, b, c, d)):
+            logger.info(f'calibration_four {vals} (no FT hand-off stamp; '
+                        'all zero — nothing is trimmed)')
+        else:
+            logger.info(f'calibration_four {vals} (no FT hand-off stamp; '
+                        'typed by hand or from another build)')
 
     def autostart_timeout(self):
         print('autostart timeout')

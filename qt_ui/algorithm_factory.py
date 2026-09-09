@@ -14,7 +14,7 @@ from stim_math.audio_gen.params import *
 from qt_ui.models.funscript_kit import FunscriptKitModel
 from qt_ui.models.script_mapping import ScriptMappingModel
 from qt_ui.device_wizard.axes import AxisEnum
-from stim_math.axis import create_precomputed_axis, AbstractTimestampMapper, create_constant_axis, AbstractMediaSync, OffsetAxis
+from stim_math.axis import create_precomputed_axis, AbstractTimestampMapper, create_constant_axis, AbstractMediaSync
 
 
 class AlgorithmFactory:
@@ -188,30 +188,23 @@ class AlgorithmFactory:
         )
         return algorithm
 
-    def _fourphase_calibrate_with_trims(self) -> FourphaseCalibrationParams:
-        """The user's A/B/C/D power axes, with the calibration profile's
-        gain_trims overlaid as dB offsets (staged by the mainwindow from
-        ~/.restim/calibration.json). Spinboxes stay untouched; no profile
-        (or apply_gain_trims=false) → plain pass-through."""
+    def _fourphase_calibrate(self) -> FourphaseCalibrationParams:
+        """The user's A/B/C/D power axes, exactly as the 4-phase tab holds
+        them. Those spinboxes ARE the calibration: Funscript Tools writes its
+        hand-off into them ([calibration_four] in restim.ini) and nothing is
+        overlaid on top. (Until 2026-09-08 this fork also staged
+        ~/.restim/calibration.json gain_trims here as OffsetAxis offsets; that
+        second path is gone.)"""
         cal = self.mainwindow.tab_fourphase.calibrate_params
         # Scripted spatial contrast: a mapped center_reduction funscript
         # overrides the calibration tab's constant (kit axis
         # CALIBRATION_4_CENTER_REDUCTION); no script -> constant rules.
         center = self.get_axis_from_script_mapping(
             AxisEnum.CALIBRATION_4_CENTER_REDUCTION) or cal.center_reduction
-        trims = getattr(self.mainwindow, 'calibration_trims_db', {}) or {}
-        if not any(abs(v) > 0.01 for v in trims.values()):
-            if center is cal.center_reduction:
-                return cal
-            return FourphaseCalibrationParams(
-                a=cal.a, b=cal.b, c=cal.c, d=cal.d,
-                center_reduction=center,
-            )
+        if center is cal.center_reduction:
+            return cal
         return FourphaseCalibrationParams(
-            a=OffsetAxis(cal.a, trims.get('E1', 0.0)),
-            b=OffsetAxis(cal.b, trims.get('E2', 0.0)),
-            c=OffsetAxis(cal.c, trims.get('E3', 0.0)),
-            d=OffsetAxis(cal.d, trims.get('E4', 0.0)),
+            a=cal.a, b=cal.b, c=cal.c, d=cal.d,
             center_reduction=center,
         )
 
@@ -226,7 +219,7 @@ class AlgorithmFactory:
                     self.get_axis_intensity_d(),
                 ),
                 # transform=self.mainwindow.tab_threephase.transform_params,
-                calibrate=self._fourphase_calibrate_with_trims(),
+                calibrate=self._fourphase_calibrate(),
                 volume=VolumeParams(
                     api=self.get_axis_volume_api(),
                     master=self.get_axis_volume_master(),
