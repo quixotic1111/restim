@@ -30,6 +30,16 @@ from qt_ui.models.funscript_kit import FunscriptKitItem
 from qt_ui import settings
 
 
+MAIN_VARIANT_LABEL = 'Main'
+
+
+def variant_selector_index(letters: list[str], active: str | None) -> int:
+    """Combobox index of the active variant. Index 0 is 'Main', the scripts
+    beside the media: the default, so a variants folder never swaps what
+    plays until a variant is picked."""
+    return letters.index(active) + 1 if active in letters else 0
+
+
 class _MediaSettingsWidget(type(QtWidgets.QWidget), type(Ui_MediaSettingsWidget)):
     pass
 
@@ -107,7 +117,8 @@ class MediaSettingsWidget(QtWidgets.QWidget, Ui_MediaSettingsWidget, metaclass=_
         self.additional_search_paths_button.clicked.connect(self.open_search_paths_dialog)
         self.reload_scripts_button.clicked.connect(self.reload_scripts)
 
-        # Variant selector: shown only when a sibling <scene>_variants/ folder exists.
+        # Variant selector: shown only when a <scene>/variants/ (or older
+        # sibling <scene>_variants/) folder exists.
         self.available_variants: list[tuple[str, str]] = []
         self.active_variant: str | None = None
         self.variant_widget = QWidget(self.widget_3)
@@ -265,13 +276,12 @@ class MediaSettingsWidget(QtWidgets.QWidget, Ui_MediaSettingsWidget, metaclass=_
         self.variant_combobox.clear()
         if variants:
             letters = [letter for letter, _ in variants]
+            self.variant_combobox.addItem(MAIN_VARIANT_LABEL)
             for letter in letters:
                 self.variant_combobox.addItem(letter)
-            if self.active_variant in letters:
-                idx = letters.index(self.active_variant)
-            else:
-                idx = 0
-                self.active_variant = letters[0]
+            idx = variant_selector_index(letters, self.active_variant)
+            if idx == 0:
+                self.active_variant = None
             self.variant_combobox.setCurrentIndex(idx)
             self.variant_widget.setVisible(True)
         else:
@@ -280,9 +290,9 @@ class MediaSettingsWidget(QtWidgets.QWidget, Ui_MediaSettingsWidget, metaclass=_
         self.variant_combobox.blockSignals(False)
 
     def on_variant_changed(self, index: int):
-        if index < 0 or index >= len(self.available_variants):
+        if index < 0 or index > len(self.available_variants):
             return
-        new_variant = self.available_variants[index][0]
+        new_variant = self.available_variants[index - 1][0] if index > 0 else None
         if new_variant == self.active_variant:
             return
         self.active_variant = new_variant
@@ -298,11 +308,11 @@ class MediaSettingsWidget(QtWidgets.QWidget, Ui_MediaSettingsWidget, metaclass=_
         self.variantSwapped.emit()
 
     def select_variant_by_letter(self, letter: str) -> bool:
-        """Select variant by letter (e.g. 'A'). Returns True on success."""
+        """Select variant by letter (e.g. 'A'), or None for the main scripts. Returns True on success."""
         letters = [l for l, _ in self.available_variants]
-        if letter not in letters:
+        if not letters or (letter is not None and letter not in letters):
             return False
-        self.variant_combobox.setCurrentIndex(letters.index(letter))
+        self.variant_combobox.setCurrentIndex(variant_selector_index(letters, letter))
         return True
 
     def has_media_file_loaded(self):

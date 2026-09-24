@@ -379,15 +379,16 @@ class Window(QMainWindow, Ui_MainWindow):
         self.actionStart.triggered.connect(self.signal_start_stop)
 
         # Alt+1..4 hot-swap between funscript variants (A/B/C/D) when a
-        # `<scene>_variants/` folder is present next to the loaded media.
+        # `<scene>/variants/` (or older `<scene>_variants/`) folder is present
+        # for the loaded media; Alt+0 goes back to the main scripts.
         # Ctrl+1..4 are already bound to the sidebar tabs.
-        for i, letter in enumerate(['A', 'B', 'C', 'D']):
-            shortcut = QShortcut(QKeySequence(f'Alt+{i + 1}'), self)
+        for i, letter in enumerate([None, 'A', 'B', 'C', 'D']):
+            shortcut = QShortcut(QKeySequence(f'Alt+{i}'), self)
             shortcut.activated.connect(lambda l=letter: self._select_funscript_variant(l))
 
-    def _select_funscript_variant(self, letter: str):
+    def _select_funscript_variant(self, letter: str | None):
         if self.page_media.select_variant_by_letter(letter):
-            logger.info(f'selected funscript variant {letter}')
+            logger.info(f'selected funscript variant {letter or "Main"}')
 
     def _variant_swap_note_playstate(self):
         self._resume_after_variant_swap = self.playstate != PlayState.STOPPED

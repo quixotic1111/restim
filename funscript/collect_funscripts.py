@@ -128,7 +128,8 @@ def collect_funscripts(
 
 def detect_variant_folders(media_path: str) -> list[tuple[str, str]]:
     """
-    Look for a sibling `<media_prefix>_variants/` folder next to the media file.
+    Look for the media file's variants folder: `<media_prefix>/variants/`, or
+    the older sibling `<media_prefix>_variants/` when that does not exist.
     Returns an ordered list of (letter, absolute_path) for subfolders matching
     a single uppercase letter (A-Z). Empty if no variants folder exists.
     """
@@ -139,8 +140,11 @@ def detect_variant_folders(media_path: str) -> list[tuple[str, str]]:
     media_prefix, _, _ = split_funscript_path(basename)
     if not media_prefix:
         return []
-    variants_dir = os.path.join(dirname, f'{media_prefix}_variants')
-    if not os.path.isdir(variants_dir):
+    for variants_dir in (os.path.join(dirname, media_prefix, 'variants'),
+                         os.path.join(dirname, f'{media_prefix}_variants')):
+        if os.path.isdir(variants_dir):
+            break
+    else:
         return []
     results = []
     try:
