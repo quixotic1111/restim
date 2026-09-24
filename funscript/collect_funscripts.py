@@ -56,9 +56,12 @@ def collect_funscripts(
         media: str
 ) -> list[Resource]:
     """
-    Search the directories in order for funscripts. Stop searching when at least one funscript is found in a directly.
-    If a directory is found with the same name as the media, search that directory too.
-    zipfiles are supported.
+    Search the directories in order for funscripts. Stop searching when at least one funscript is found in a directory.
+    A directory or zipfile with the same name as the media, found inside a searched directory, belongs to that
+    directory's search: it is read even when the directory itself holds funscripts.
+    When the same funscript type is found more than once, the nearest copy wins: the directory itself, then
+    the directories named after the media, then the zipfiles named after the media.
+    Backup zipfiles (`<media>.backup-*.zip`) are not searched.
     :param dirs:
     :param media:
     :return:
@@ -70,15 +73,20 @@ def collect_funscripts(
         except OSError:
             return False
 
-    dir_stack = dirs[:]
+    # (path, named_after_media)
+    dir_stack = [(d, False) for d in dirs]
     new_dirs = []
     collected_files = []
+    collected_types = set()
 
     media_prefix, _, media_extension = split_funscript_path(media)
 
-    while dir_stack and len(collected_files) == 0:
+    while dir_stack:
+        current_dir, named_after_media = dir_stack[0]
+        if collected_files and not named_after_media:
+            break
         try:
-            current_dir = os.path.expanduser(dir_stack[0])
+            current_dir = os.path.expanduser(current_dir)
             del dir_stack[0]
 
             logger.info(f'detecting funscripts from {current_dir}')
@@ -100,24 +108,27 @@ def collect_funscripts(
                 full_path = os.path.join(current_dir, node.name)
                 if not traversing_a_zip and node.is_dir(): # do not support dir-in-zip
                     if case_insensitive_compare(node.name, media_prefix):
-                        new_dirs.append(full_path)
+                        new_dirs.append((full_path, True))
                     elif search_subdirectories:
-                        new_dirs.append(full_path+"/*")
+                        new_dirs.append((full_path+"/*", False))
                 else:
                     a, b, c = split_funscript_path(full_path)
                     if case_insensitive_compare(a, media_prefix):
                         if not traversing_a_zip and zipfile.is_zipfile(full_path):    # do not support zip-in-zip
-                            new_dirs.append(full_path)
+                            if not b.lower().startswith('backup-'):
+                                new_dirs.append((full_path, True))
                         elif case_insensitive_compare(c, 'funscript'):
-                            collected_files.append(Resource(node))
+                            if b.lower() not in collected_types:
+                                collected_types.add(b.lower())
+                                collected_files.append(Resource(node))
 
 
         except OSError as e:    # unreachable network?
             pass
 
         # make sure to search dirs before zipfiles
-        new_zips = list(filter(path_is_zip, new_dirs))
-        new_dirs = list(filter(lambda x: not path_is_zip(x), new_dirs))
+        new_zips = [d for d in new_dirs if path_is_zip(d[0])]
+        new_dirs = [d for d in new_dirs if not path_is_zip(d[0])]
         dir_stack = new_dirs + new_zips + dir_stack
         new_dirs = []
 

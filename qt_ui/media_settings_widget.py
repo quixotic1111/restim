@@ -241,8 +241,9 @@ class MediaSettingsWidget(QtWidgets.QWidget, Ui_MediaSettingsWidget, metaclass=_
             if variant_path:
                 # Scope to the selected variant so sibling scripts in the scene
                 # folder do not leak in. collect_funscripts stops at the first
-                # directory that yields matches anyway, but being explicit here
-                # makes the behavior obvious to the user.
+                # directory that yields matches (plus the folders and zips
+                # named after the media inside it) anyway, but being explicit
+                # here makes the behavior obvious to the user.
                 search_paths = [variant_path]
             else:
                 search_paths = [dirname] + extra_paths
