@@ -141,6 +141,7 @@ class TCodeCommandRouter:
             route = self.mapping[cmd.axis_identifier]
             mapped = route.remap(cmd.value)
             route.axis.add(mapped, cmd.interval / 1000.0)
+            route.axis.notify_tcode_update.emit()
             # NOTE: no per-command debug log here — at DEBUG level it fires
             # ~11×/frame × 60fps = ~660 lines/s, flooding restim.log to tens of
             # MB and stalling stream processing in bursts (felt as the spatial

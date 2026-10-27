@@ -3,6 +3,10 @@ import matplotlib
 import numpy as np
 import time
 
+from qt_ui.settings import pulse_width
+from stim_math import limits
+from stim_math.burst_gap import burst_gap_frequency_to_pulse_frequency
+
 # Make sure that we are using QT5
 matplotlib.use('Qt5Agg')
 
@@ -90,6 +94,8 @@ class PulseSettingsWidget(QtWidgets.QWidget):
         self.axis_pulse_rise_time = create_constant_axis(settings.pulse_rise_time.get())
         self.axis_tau = create_constant_axis(settings.tau_us.get())
 
+        self.burst_gap_enabled = False
+
         l = QtWidgets.QFormLayout(self)
         l.setObjectName("FormLayout")
         self.mpl_canvas = MyStaticMplCanvas(self, width=7, height=3, dpi=100)
@@ -120,6 +126,8 @@ class PulseSettingsWidget(QtWidgets.QWidget):
         pulse_freq_slider.setKeyboardTracking(False)
         pulse_freq_slider_label = QtWidgets.QLabel("pulse frequency [Hz]")
         gb_l.addRow(pulse_freq_slider_label, pulse_freq_slider)
+
+        self.pulse_freq_slider_label = pulse_freq_slider_label
 
         pulse_width_slider = SpinBoxWithProgressIndicator(minimum=stim_math.limits.PulseWidth.min,
                                                           maximum=stim_math.limits.PulseWidth.max)
@@ -245,21 +253,11 @@ class PulseSettingsWidget(QtWidgets.QWidget):
         self.tau_slider = tau_slider
         self.derating_info = derating_info
 
-
-        self.carrier_controller = AxisController(self.carrier)
-        self.carrier_controller.link_axis(self.axis_carrier_frequency)
-
-        self.pulse_frequency_controller = AxisController(self.pulse_freq_slider)
-        self.pulse_frequency_controller.link_axis(self.axis_pulse_frequency)
-
-        self.pulse_width_controller = AxisController(self.pulse_width_slider)
-        self.pulse_width_controller.link_axis(self.axis_pulse_width)
-
-        self.pulse_interval_random_controller = PercentAxisController(self.pulse_interval_random)
-        self.pulse_interval_random_controller.link_axis(self.axis_pulse_interval_random)
-
-        self.pulse_rise_time_controller = AxisController(self.pulse_rise_time)
-        self.pulse_rise_time_controller.link_axis(self.axis_pulse_rise_time)
+        self.carrier_controller = AxisController(self.carrier, self.axis_carrier_frequency)
+        self.pulse_frequency_controller = AxisController(self.pulse_freq_slider, self.axis_pulse_frequency)
+        self.pulse_width_controller = AxisController(self.pulse_width_slider, self.axis_pulse_width)
+        self.pulse_interval_random_controller = PercentAxisController(self.pulse_interval_random, self.axis_pulse_interval_random)
+        self.pulse_rise_time_controller = AxisController(self.pulse_rise_time, self.axis_pulse_rise_time)
 
         self.tau_controller = AxisController(self.tau_slider)
         self.tau_controller.link_axis(self.axis_tau)
@@ -282,20 +280,28 @@ class PulseSettingsWidget(QtWidgets.QWidget):
         carrier_freq = self.carrier.value()
         pulse_freq = self.pulse_freq_slider.value()
         pulse_width = self.pulse_width_slider.value()
-        duty_cycle = pulse_freq*pulse_width / carrier_freq
+        if self.burst_gap_enabled:
+            pulse_freq = burst_gap_frequency_to_pulse_frequency(carrier_freq, pulse_freq, pulse_width)
+        requested_pulse_freq = pulse_freq
+
+        pulse_width_in_s = np.clip(pulse_width / carrier_freq, None, limits.PulseDuration.max)
+        pause_width_in_s = np.clip(1 / pulse_freq - pulse_width_in_s, limits.InterPulseIntervalDuration.min, limits.InterPulseIntervalDuration.max)
+        pulse_freq = 1 / (pulse_width_in_s + pause_width_in_s)
+
+        duty_cycle = pulse_width_in_s / (pulse_width_in_s + pause_width_in_s)
         rise_time = self.pulse_rise_time.value()
-        if duty_cycle <= 1:
-            self.details_info.setStyleSheet('')
-            self.details_info.setText(f'{duty_cycle:.0%}')
-        else:
-            # Show the REAL value, not a clamped 100%. Red already carries the
-            # "over the limit" warning; clamping additionally hid HOW FAR over,
-            # so 140% and 400% read identically. That number is the useful one:
-            # the firmware never actually reaches duty 1 (it stretches the
-            # period instead), so the question is always how far past, not
-            # whether.
+        details = (f'on: {pulse_width_in_s * 1000:3.1f}ms / off: {pause_width_in_s * 1000:3.1f}ms'
+                   f' / duty: {duty_cycle:.0%}')
+        if pulse_freq < requested_pulse_freq * 0.999:
+            # The device floors the pause between pulses and caps the pulse
+            # length, so a rate it cannot reach is delivered slower. Show the
+            # delivered rate in red instead of stretching the period silently:
+            # how far past the limit is the useful number.
             self.details_info.setStyleSheet('color: red')
-            self.details_info.setText(f'{duty_cycle:.0%}')
+            details += f' — {pulse_freq:.0f} Hz delivered (asked {requested_pulse_freq:.0f})'
+        else:
+            self.details_info.setStyleSheet('')
+        self.details_info.setText(details)
 
         # Effective rise readout. The envelope generator caps each ramp at
         # half the pulse width (create_pulse_with_ramp_time falls back to a
@@ -323,6 +329,18 @@ class PulseSettingsWidget(QtWidgets.QWidget):
             self.derating_info.setText('—')
 
         self.mpl_canvas.updateParams(carrier_freq, pulse_freq, pulse_width, self.pulse_interval_random.value() / 100, rise_time)
+
+    def burst_gap_enable_changed(self, burst_gap_enabled):
+        self.burst_gap_enabled = burst_gap_enabled
+
+        if self.burst_gap_enabled:
+            self.pulse_freq_slider_label.setText("burst gap frequency [Hz] (?)")
+            self.pulse_freq_slider_label.setToolTip("1 / pulse gap")
+        else:
+            self.pulse_freq_slider_label.setText("pulse frequency [Hz] (?)")
+            self.pulse_freq_slider_label.setToolTip("average rate of pulses")
+
+        self.settings_changed()
 
     def save_settings(self):
         settings.pulse_carrier_frequency.set(self.carrier_controller.last_user_entered_value)
